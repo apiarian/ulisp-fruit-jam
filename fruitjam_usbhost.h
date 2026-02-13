@@ -1,6 +1,26 @@
 // fruitjam_usbhost.h — USB Host keyboard support for Fruit Jam
 // Runs TinyUSB host via PIO USB on core1 (setup1/loop1)
 // Provides a ring buffer of ASCII characters for gserial() on core0
+//
+// USB recovery mechanisms (PIO USB is prone to going deaf):
+//
+//   1. Zero-length reports: PIO USB can resume low-level polling after a glitch
+//      but TinyUSB doesn't re-enumerate, producing len=0 HID reports. Detected
+//      after 10 consecutive len=0 reports; recovered by power-cycling USB 5V.
+//
+//   2. Re-arm failure: tuh_hid_receive_report() can fail silently after a
+//      callback, killing the HID pipeline. Detected by checking the return
+//      value and retrying every loop1() iteration. If retries fail for 5s,
+//      power-cycle.
+//
+//   3. PIO USB deaf state: the PIO state machine goes completely unresponsive.
+//      Re-arm "succeeds" (returns true) but callbacks never fire. Physical
+//      disconnect is not detected. Caught by a 60s last-resort timeout on
+//      HID callback activity. Power-cycles to recover.
+//
+//   4. Manual recovery: BUTTON1 (escape button) also triggers an immediate USB
+//      5V power-cycle via shared flag, so pressing escape recovers both a hung
+//      Lisp program and a hung keyboard in one action.
 
 #ifndef FRUITJAM_USBHOST_H
 #define FRUITJAM_USBHOST_H
@@ -14,6 +34,8 @@ volatile bool fruitjam_clocks_ready = false;
 
 // ---- USB host state tracking ----
 static volatile bool     usbh_mounted = false;
+static volatile uint8_t  usbh_hid_dev_addr = 0;       // saved from HID mount for re-arm
+static volatile uint8_t  usbh_hid_instance = 0;
 
 // ---- USB recovery: detect broken connection and power-cycle ----
 static volatile uint32_t usbh_zero_len_count = 0;    // consecutive zero-length reports
@@ -24,6 +46,17 @@ static volatile bool     usbh_power_restored = false;  // phase tracking for res
 #define USBH_ZERO_LEN_THRESHOLD  10   // trigger reset after this many consecutive len=0
 #define USBH_RESET_OFF_MS       200   // how long to hold 5V off
 #define USBH_RESET_SETTLE_MS    500   // wait after re-enabling 5V before resuming
+
+// ---- HID pipeline health ----
+static volatile uint32_t usbh_last_hid_cb_ms = 0;    // millis() of last HID callback (any len)
+static volatile bool     usbh_hid_armed = false;      // true when receive_report is active
+static volatile uint32_t usbh_rearm_fail_since = 0;   // millis() when re-arm first failed (0=ok)
+
+#define USBH_REARM_FAIL_TIMEOUT_MS  5000   // power-cycle after re-arm fails for this long
+#define USBH_DEAD_SILENCE_MS       60000   // power-cycle if mounted but no callbacks for 60s
+
+// ---- Manual USB recovery (triggered by BUTTON1 escape, see fruitjam_escape.h) ----
+static volatile bool usbh_manual_reset_requested = false;
 
 // ---- Ring buffer for keyboard input (shared between cores) ----
 
@@ -250,13 +283,13 @@ void fruitjam_usbhost_setup1() {
 }
 
 // Power-cycle the USB 5V rail to force a full re-enumeration.
-// PIO USB doesn't always detect disconnect/reconnect properly,
-// resulting in zero-length HID reports. This recovers from that.
 static void usbh_start_reset() {
   usbh_resetting = true;
   usbh_reset_start = millis();
   usbh_mounted = false;
   usbh_zero_len_count = 0;
+  usbh_hid_armed = false;
+  usbh_rearm_fail_since = 0;
   usbh_power_restored = false;
 
   // Kill 5V power to the USB port
@@ -285,8 +318,44 @@ void fruitjam_usbhost_loop1() {
     }
   }
 
+  // Check for manual recovery request (BUTTON2 press)
+  if (usbh_manual_reset_requested && !usbh_resetting) {
+    usbh_manual_reset_requested = false;
+    usbh_start_reset();
+    return;
+  }
+
   tuh_task_ext(10, false);
   kbd_handle_repeat();
+
+  // If re-arm failed in the callback, retry it here every loop iteration.
+  // This handles the case where tuh_hid_receive_report() fails after a
+  // callback, silently killing the HID pipeline.
+  if (usbh_mounted && !usbh_hid_armed && !usbh_resetting && usbh_hid_dev_addr != 0) {
+    if (tuh_hid_receive_report(usbh_hid_dev_addr, usbh_hid_instance)) {
+      usbh_hid_armed = true;
+      usbh_rearm_fail_since = 0;
+    } else {
+      // Re-arm still failing — track how long
+      if (usbh_rearm_fail_since == 0) {
+        usbh_rearm_fail_since = millis();
+      } else if ((millis() - usbh_rearm_fail_since) >= USBH_REARM_FAIL_TIMEOUT_MS) {
+        // Pipeline is dead — power-cycle to recover
+        usbh_rearm_fail_since = 0;
+        usbh_start_reset();
+      }
+    }
+  }
+
+  // Last-resort auto-recovery: PIO USB is completely deaf.
+  // Re-arm "succeeds" (returns true) but callbacks never fire.
+  // Physical disconnect not detected. Only detectable by time.
+  // 60s is conservative — won't trigger during normal thinking pauses.
+  if (usbh_mounted && !usbh_resetting && usbh_hid_armed &&
+      usbh_last_hid_cb_ms != 0 &&
+      (millis() - usbh_last_hid_cb_ms) >= USBH_DEAD_SILENCE_MS) {
+    usbh_start_reset();
+  }
 }
 
 // ---- TinyUSB HID Host callbacks (called from core1 context) ----
@@ -310,7 +379,14 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
   if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-    tuh_hid_receive_report(dev_addr, instance);
+    usbh_hid_dev_addr = dev_addr;
+    usbh_hid_instance = instance;
+    usbh_hid_armed = false;
+    usbh_rearm_fail_since = 0;
+    usbh_last_hid_cb_ms = millis();
+    if (tuh_hid_receive_report(dev_addr, instance)) {
+      usbh_hid_armed = true;
+    }
   }
 }
 
@@ -325,6 +401,11 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
                                 uint8_t const *report, uint16_t len) {
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+
+  // Track that we received a callback — pipeline is alive
+  usbh_last_hid_cb_ms = millis();
+  usbh_hid_armed = false;       // will be re-armed below
+  usbh_rearm_fail_since = 0;    // reset failure tracking
 
   if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD && len >= sizeof(hid_keyboard_report_t)) {
     usbh_zero_len_count = 0;  // good report — reset the watchdog
@@ -342,7 +423,10 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
 
   // Re-arm for next report (unless we're in the middle of a reset)
   if (!usbh_resetting) {
-    tuh_hid_receive_report(dev_addr, instance);
+    if (tuh_hid_receive_report(dev_addr, instance)) {
+      usbh_hid_armed = true;
+    }
+    // If re-arm failed, usbh_hid_armed stays false → loop1 will retry
   }
 }
 

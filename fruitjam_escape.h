@@ -12,6 +12,7 @@ static volatile bool escape_button_pressed = false;
 
 static void fruitjam_escape_isr() {
   escape_button_pressed = true;
+  usbh_manual_reset_requested = true;  // also trigger USB recovery (defined in fruitjam_usbhost.h)
 }
 
 static void fruitjam_escape_setup() {

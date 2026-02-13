@@ -376,6 +376,7 @@ const char LispLibrary[] = "";
   #define SDCARD_SS_PIN 39
   #define CPU_RP2350
   #include "fruitjam_terminal.h"
+  #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
   #include "fruitjam_escape.h"
 
