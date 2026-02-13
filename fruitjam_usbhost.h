@@ -15,12 +15,19 @@
 //
 //   3. PIO USB deaf state: the PIO state machine goes completely unresponsive.
 //      Re-arm "succeeds" (returns true) but callbacks never fire. Physical
-//      disconnect is not detected. Caught by a 60s last-resort timeout on
+//      disconnect is not detected. Caught by a 15s last-resort timeout on
 //      HID callback activity. Power-cycles to recover.
 //
-//   4. Manual recovery: BUTTON1 (escape button) also triggers an immediate USB
-//      5V power-cycle via shared flag, so pressing escape recovers both a hung
-//      Lisp program and a hung keyboard in one action.
+//   4. Manual recovery: BUTTON1 (escape button) sets a flag requesting USB
+//      power-cycle. If core1 is alive, it picks this up in loop1() and does
+//      a normal 5V power-cycle. If core1 is locked, mechanism 5 handles it.
+//
+//   5. Core0 auto-recovery (5s heartbeat): Core1 updates a heartbeat timestamp
+//      every loop1() iteration. Core0 checks from the gserial() input wait
+//      loop. If the heartbeat stalls for 5s (core1 stuck despite library
+//      timeouts), core0 triggers emergency PIO unstick — directly cuts 5V,
+//      force-sets PIO 2 IRQ flags, force-jumps all SMs, disables PIO output
+//      driving on D+/D-. This breaks core1 out of any PIO busy-wait.
 
 #ifndef FRUITJAM_USBHOST_H
 #define FRUITJAM_USBHOST_H
@@ -28,6 +35,8 @@
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
 #include "hardware/dma.h"
+#include "hardware/structs/iobank0.h"
+#include "hardware/structs/sio.h"
 
 // ---- Synchronization: core1 waits for display init (clock reconfiguration) ----
 volatile bool fruitjam_clocks_ready = false;
@@ -58,6 +67,12 @@ static volatile uint32_t usbh_rearm_fail_since = 0;   // millis() when re-arm fi
 
 // ---- Manual USB recovery (triggered by BUTTON1 escape, see fruitjam_escape.h) ----
 static volatile bool usbh_manual_reset_requested = false;
+
+// ---- Core1 heartbeat (for core0 auto-recovery, mechanism 5) ----
+// Updated every loop1() iteration. If this stalls, core1 is stuck.
+static volatile uint32_t usbh_core1_heartbeat_ms = 0;
+
+#define USBH_HEARTBEAT_TIMEOUT_MS  5000  // core0 triggers emergency reset after this
 
 // ---- Ring buffer for keyboard input (shared between cores) ----
 
@@ -91,6 +106,22 @@ static int kbd_ring_get() {
 
 static inline bool kbd_available() {
   return !kbd_ring_empty();
+}
+
+// Forward declaration (defined after setup1)
+static void fruitjam_usb_emergency_reset();
+
+// Called from core0's gserial() wait loop to detect core1 lockups.
+// If core1's heartbeat has stalled for USBH_HEARTBEAT_TIMEOUT_MS,
+// triggers emergency PIO unstick + power-cycle from core0.
+static void usbh_check_core1_health() {
+  uint32_t hb = usbh_core1_heartbeat_ms;
+  if (hb == 0) return;  // core1 hasn't started yet
+  if (usbh_resetting) return;  // already recovering
+  uint32_t now = millis();
+  if ((now - hb) >= USBH_HEARTBEAT_TIMEOUT_MS) {
+    fruitjam_usb_emergency_reset();
+  }
 }
 
 // ---- USB Host object ----
@@ -289,6 +320,67 @@ void fruitjam_usbhost_setup1() {
 
   tusb_rhport_init_t host_init = { .role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_AUTO };
   tusb_init(1, &host_init);
+
+  // Initialize heartbeat so core0 doesn't false-trigger before first loop1()
+  usbh_core1_heartbeat_ms = millis();
+}
+
+// ---- Emergency PIO unstick (callable from core0 or ISR context) ----
+//
+// When core1 is locked in a PIO busy-wait (e.g., SOF timer callback waiting
+// for PIO IRQ that never fires), flag-based recovery is useless — nobody on
+// core1 reads the flags. This function directly manipulates hardware registers
+// to break the deadlock:
+//
+//   1. Cut 5V power — device will disconnect, bus goes SE0
+//   2. Force-set all PIO 2 IRQ flags — breaks `while ((irq & mask) == 0)` loops
+//   3. Force-jump all PIO 2 SMs to instruction 31 — breaks `while (*pc <= N)` loops
+//   4. Disable PIO output driving on D+/D- — so connection_check() reads actual
+//      bus state (SE0 from device off), not PIO-driven levels
+//
+// After this, the SOF timer callback will return, connection_check() will
+// detect SE0 (disconnect), and loop1() will resume. The usbh_start_reset()
+// function then handles the timed re-enable of 5V power.
+//
+// Safe to call from any core or ISR — only does GPIO writes and direct
+// hardware register writes (no malloc, no SDK calls that take locks).
+
+static void fruitjam_usb_emergency_reset() {
+  // 1. Cut 5V power immediately
+  sio_hw->gpio_clr = (1u << PIN_5V_EN);   // direct register write, no SDK call
+
+  // 2. Force-set all PIO 2 IRQ flags (bits 0-7)
+  //    This breaks any `while ((pio->irq & mask) == 0)` busy-wait
+  pio2_hw->irq_force = 0xFF;
+
+  // 3. Force all 4 PIO 2 state machines to jump to instruction 31
+  //    This breaks `while (*pc <= N)` busy-waits where N < 31
+  //    pio_sm_exec() equivalent: write the JMP 31 instruction to SMx_INSTR
+  //    JMP 31 = 0x001F (opcode 000, condition 00, address 11111)
+  for (int sm = 0; sm < 4; sm++) {
+    pio2_hw->sm[sm].instr = 0x0000 | 31;  // JMP 31
+  }
+
+  // 4. Disable PIO output driving on D+ and D- pins
+  //    Set output enable override to "force disable" so the PIO can't
+  //    drive the pins. connection_check() reads GPIO input, which will
+  //    see the actual bus state (SE0 with device powered off).
+  //    GPIO_OVERRIDE_LOW (2) = force output enable low (tri-state)
+  hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP].ctrl,
+                  2u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
+                  IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
+  hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP + 1].ctrl,  // DM = DP + 1
+                  2u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
+                  IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
+
+  // 5. Request that core1 handle the reset sequence once it's unstuck
+  usbh_resetting = true;
+  usbh_reset_start = millis();
+  usbh_mounted = false;
+  usbh_zero_len_count = 0;
+  usbh_hid_armed = false;
+  usbh_rearm_fail_since = 0;
+  usbh_power_restored = false;
 }
 
 // Power-cycle the USB 5V rail to force a full re-enumeration.
@@ -306,6 +398,9 @@ static void usbh_start_reset() {
 }
 
 void fruitjam_usbhost_loop1() {
+  // Update heartbeat — core0 monitors this to detect core1 lockups
+  usbh_core1_heartbeat_ms = millis();
+
   // Handle USB power-cycle reset sequence
   if (usbh_resetting) {
     uint32_t elapsed = millis() - usbh_reset_start;
@@ -315,6 +410,13 @@ void fruitjam_usbhost_loop1() {
     } else if (elapsed < (USBH_RESET_OFF_MS + USBH_RESET_SETTLE_MS)) {
       // Phase 2: re-enable power, wait for device to settle
       if (!usbh_power_restored) {
+        // Restore GPIO overrides to normal (in case emergency reset disabled them)
+        hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP].ctrl,
+                        0u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
+                        IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
+        hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP + 1].ctrl,
+                        0u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
+                        IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
         digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
         usbh_power_restored = true;
       }
@@ -327,7 +429,8 @@ void fruitjam_usbhost_loop1() {
     }
   }
 
-  // Check for manual recovery request (BUTTON1 press)
+  // Check for manual recovery request (BUTTON1 press, if not already
+  // handled by emergency reset)
   if (usbh_manual_reset_requested && !usbh_resetting) {
     usbh_manual_reset_requested = false;
     usbh_start_reset();

@@ -9743,6 +9743,7 @@ int gserial () {
       // Wait for raw input from keyboard or serial
       while (!kbd_available() && !Serial.available()) {
         if (millis() - start > 1000) clrflag(NOECHO);
+        usbh_check_core1_health();  // auto-recover if core1 is stuck
       }
       int raw = kbd_available() ? (int)kbd_ring_get() : Serial.read();
       ch = fruitjam_line_getchar(raw);

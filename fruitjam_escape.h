@@ -12,7 +12,12 @@ static volatile bool escape_button_pressed = false;
 
 static void fruitjam_escape_isr() {
   escape_button_pressed = true;
-  usbh_manual_reset_requested = true;  // also trigger USB recovery (defined in fruitjam_usbhost.h)
+  // Request USB recovery via flag. If core1 is alive, it picks this up
+  // in loop1() and does a normal power-cycle. If core1 is stuck, the
+  // heartbeat auto-recovery in gserial()'s wait loop (mechanism 5) will
+  // trigger the full emergency PIO unstick after 5s — no need to do it
+  // here, where it would corrupt working PIO USB state on normal presses.
+  usbh_manual_reset_requested = true;
 }
 
 static void fruitjam_escape_setup() {
