@@ -360,17 +360,11 @@ const char LispLibrary[] = "";
   #define MEMBANK PSRAM
   #define WORKSPACESIZE 1000000           /* Objects (8*bytes) */
   #define STACKDIFF 580
-  #elif defined(__riscv) && defined(gfxsupport)
-  #define WORKSPACESIZE (18000-SDSIZE)    /* Objects (8*bytes) */
-  #define STACKDIFF 580
-  #elif defined(__riscv)                  /* RISC-V but no gfx */
+  #elif defined(__riscv)
   #define WORKSPACESIZE (42500-SDSIZE)    /* Objects (8*bytes) */
   #define STACKDIFF 580
-  #elif defined (gfxsupport)              /* ARM with gfx */
-  #define WORKSPACESIZE (22500-SDSIZE)    /* Objects (8*bytes) */
-  #define STACKDIFF 520
-  #else                                   /* ARM but no gfx */
-  #define WORKSPACESIZE (46500-SDSIZE)    /* Objects (8*bytes) */
+  #else                                   /* ARM with text-mode display (~20-30KB) */
+  #define WORKSPACESIZE (43000-SDSIZE)    /* Objects (8*bytes) */
   #define STACKDIFF 520
   #endif
   #define CODESIZE 256                    /* Bytes */
@@ -381,11 +375,9 @@ const char LispLibrary[] = "";
   #define FS_FILE_READ "r"
   #define SDCARD_SS_PIN 39
   #define CPU_RP2350
-  #if defined(gfxsupport)
-  #include <Adafruit_dvhstx.h>
-    DVHSTXPinout pinConfig = ADAFRUIT_FRUIT_JAM_CFG;
-    DVHSTX16 tft(pinConfig, DVHSTX_RESOLUTION_400x240); // Uses 19200 bytes of RAM
-  #endif
+  #include "fruitjam_terminal.h"
+  #include "fruitjam_usbhost.h"
+  #include "fruitjam_escape.h"
 
 // RA4M1 boards ***************************************************************
 
@@ -8997,6 +8989,9 @@ bool findsubstring (char *part, builtin_t name) {
 }
 
 void testescape () {
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (fruitjam_escape_check()) error2("escape!");
+  #endif
   static unsigned long n;
   if (millis()-n < 500) return;
   n = millis();
@@ -9240,8 +9235,12 @@ object *eval (object *form, object *env) {
 */
 void pserial (char c) {
   LastPrint = c;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  fruitjam_pserial(c);
+  #else
   if (c == '\n') Serial.write('\r');
   Serial.write(c);
+  #endif
 }
 
 const char ControlCodes[] = "Null\0SOH\0STX\0ETX\0EOT\0ENQ\0ACK\0Bell\0Backspace\0Tab\0Newline\0VT\0"
@@ -9734,10 +9733,26 @@ int gserial () {
     return '\n';
   #else
     unsigned long start = millis();
+    #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+    // Line-buffered input: accumulate chars, handle backspace, submit on Enter
+    for (;;) {
+      // Try to drain a completed line first
+      int ch = fruitjam_line_getchar(-1);
+      if (ch >= 0) return (char)ch;
+      // Wait for raw input from keyboard or serial
+      while (!kbd_available() && !Serial.available()) {
+        if (millis() - start > 1000) clrflag(NOECHO);
+      }
+      int raw = kbd_available() ? (int)kbd_ring_get() : Serial.read();
+      ch = fruitjam_line_getchar(raw);
+      if (ch >= 0) return (char)ch;
+    }
+    #else
     while (!Serial.available()) if (millis() - start > 1000) clrflag(NOECHO);
     char c = Serial.read();
     if (c != '\n' && !tstflag(NOECHO)) pserial(c);
     return c;
+    #endif
   #endif
 }
 
@@ -9943,15 +9958,16 @@ void initenv () {
   initgfx - initialises the graphics
 */
 void initgfx () {
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+    if (!fruitjam_terminal_begin()) {
+      pinMode(LED_BUILTIN, OUTPUT);
+      for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
+    }
+    fruitjam_escape_setup();
+  #endif
   #if defined(gfxsupport)
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-      if (!tft.begin()) { // Blink LED if insufficient RAM
-        pinMode(LED_BUILTIN, OUTPUT);
-        for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
-      }
-      pinMode(PIN_5V_EN, OUTPUT);
-      digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
-      tft.setRotation(0);
+      (void)0; // GFX mode deferred to Phase 3
     #elif defined(ARDUINO_PYBADGE_M4) || defined(ARDUINO_PYGAMER_M4)
       tft.initR(INITR_BLACKTAB);
       tft.setRotation(1);
@@ -10058,6 +10074,15 @@ void loop () {
   ulisperror();
   repl(NULL);
 }
+
+#if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+void setup1 () {
+  fruitjam_usbhost_setup1();
+}
+void loop1 () {
+  fruitjam_usbhost_loop1();
+}
+#endif
 
 void ulisperror () {
   // Come here after error
