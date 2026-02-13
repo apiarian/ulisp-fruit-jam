@@ -44,7 +44,8 @@ static volatile uint32_t usbh_reset_start = 0;        // millis() when reset beg
 static volatile bool     usbh_power_restored = false;  // phase tracking for reset
 
 #define USBH_ZERO_LEN_THRESHOLD  10   // trigger reset after this many consecutive len=0
-#define USBH_RESET_OFF_MS       200   // how long to hold 5V off
+#define USBH_RESET_OFF_MS       500   // how long to hold 5V off (must be long enough for
+                                      // device capacitors to fully discharge)
 #define USBH_RESET_SETTLE_MS    500   // wait after re-enabling 5V before resuming
 
 // ---- HID pipeline health ----
@@ -257,9 +258,17 @@ static void kbd_handle_repeat() {
 // ---- Core1 setup/loop ----
 
 void fruitjam_usbhost_setup1() {
-  // Enable 5V for USB host ports
+  // Power-cycle USB host ports to ensure clean device state.
+  // On CPU reset, GPIO11 floats and R8 pulls Q1 gate low (5V off), but
+  // the 5V rail capacitance may keep devices powered through a fast
+  // reset-to-reinit cycle. Explicitly hold 5V off for 500ms to guarantee
+  // the device fully resets — this fixes keyboards that get stuck in a
+  // state that normal re-enumeration can't recover from.
   pinMode(PIN_5V_EN, OUTPUT);
-  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
+  digitalWrite(PIN_5V_EN, !PIN_5V_EN_STATE);  // 5V OFF
+  delay(500);
+  digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);   // 5V ON
+  delay(200);                                  // let device power up
 
   // Wait for core0 to finish display init (which reconfigures clocks).
   // PIO USB needs CLK_SYS divisible by 48 MHz. After DVHSTX init,
