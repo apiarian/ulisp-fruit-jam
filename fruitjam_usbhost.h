@@ -12,6 +12,19 @@
 // ---- Synchronization: core1 waits for display init (clock reconfiguration) ----
 volatile bool fruitjam_clocks_ready = false;
 
+// ---- USB host state tracking ----
+static volatile bool     usbh_mounted = false;
+
+// ---- USB recovery: detect broken connection and power-cycle ----
+static volatile uint32_t usbh_zero_len_count = 0;    // consecutive zero-length reports
+static volatile bool     usbh_resetting = false;      // true during power-cycle
+static volatile uint32_t usbh_reset_start = 0;        // millis() when reset began
+static volatile bool     usbh_power_restored = false;  // phase tracking for reset
+
+#define USBH_ZERO_LEN_THRESHOLD  10   // trigger reset after this many consecutive len=0
+#define USBH_RESET_OFF_MS       200   // how long to hold 5V off
+#define USBH_RESET_SETTLE_MS    500   // wait after re-enabling 5V before resuming
+
 // ---- Ring buffer for keyboard input (shared between cores) ----
 
 #define KBD_RINGBUF_SIZE 256
@@ -236,8 +249,43 @@ void fruitjam_usbhost_setup1() {
   tusb_init(1, &host_init);
 }
 
+// Power-cycle the USB 5V rail to force a full re-enumeration.
+// PIO USB doesn't always detect disconnect/reconnect properly,
+// resulting in zero-length HID reports. This recovers from that.
+static void usbh_start_reset() {
+  usbh_resetting = true;
+  usbh_reset_start = millis();
+  usbh_mounted = false;
+  usbh_zero_len_count = 0;
+  usbh_power_restored = false;
+
+  // Kill 5V power to the USB port
+  digitalWrite(PIN_5V_EN, !PIN_5V_EN_STATE);
+}
+
 void fruitjam_usbhost_loop1() {
-  tuh_task_ext(UINT32_MAX, false);
+  // Handle USB power-cycle reset sequence
+  if (usbh_resetting) {
+    uint32_t elapsed = millis() - usbh_reset_start;
+    if (elapsed < USBH_RESET_OFF_MS) {
+      // Phase 1: keep power off
+      return;
+    } else if (elapsed < (USBH_RESET_OFF_MS + USBH_RESET_SETTLE_MS)) {
+      // Phase 2: re-enable power, wait for device to settle
+      if (!usbh_power_restored) {
+        digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
+        usbh_power_restored = true;
+      }
+      // Still run tuh_task so TinyUSB can detect the new connection
+      tuh_task_ext(10, false);
+      return;
+    } else {
+      // Phase 3: reset complete, resume normal operation
+      usbh_resetting = false;
+    }
+  }
+
+  tuh_task_ext(10, false);
   kbd_handle_repeat();
 }
 
@@ -247,10 +295,12 @@ extern "C" {
 
 void tuh_mount_cb(uint8_t daddr) {
   (void)daddr;
+  usbh_mounted = true;
 }
 
 void tuh_umount_cb(uint8_t daddr) {
   (void)daddr;
+  usbh_mounted = false;
 }
 
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
@@ -277,10 +327,23 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
   if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD && len >= sizeof(hid_keyboard_report_t)) {
+    usbh_zero_len_count = 0;  // good report — reset the watchdog
     process_keyboard_report((hid_keyboard_report_t const *)report);
+  } else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD && len == 0) {
+    // Zero-length keyboard report — connection is broken (PIO USB resumed
+    // low-level polling after a glitch but TinyUSB didn't re-enumerate).
+    // Power-cycle the USB port to force a clean re-enumeration.
+    usbh_zero_len_count++;
+    if (usbh_zero_len_count == USBH_ZERO_LEN_THRESHOLD) {
+      usbh_start_reset();
+      return;  // don't re-arm, we're resetting
+    }
   }
 
-  tuh_hid_receive_report(dev_addr, instance);
+  // Re-arm for next report (unless we're in the middle of a reset)
+  if (!usbh_resetting) {
+    tuh_hid_receive_report(dev_addr, instance);
+  }
 }
 
 } // extern "C"
