@@ -53,7 +53,7 @@ static volatile bool     usbh_hid_armed = false;      // true when receive_repor
 static volatile uint32_t usbh_rearm_fail_since = 0;   // millis() when re-arm first failed (0=ok)
 
 #define USBH_REARM_FAIL_TIMEOUT_MS  5000   // power-cycle after re-arm fails for this long
-#define USBH_DEAD_SILENCE_MS       60000   // power-cycle if mounted but no callbacks for 60s
+#define USBH_DEAD_SILENCE_MS       15000   // power-cycle if mounted but no callbacks for 15s
 
 // ---- Manual USB recovery (triggered by BUTTON1 escape, see fruitjam_escape.h) ----
 static volatile bool usbh_manual_reset_requested = false;
@@ -318,7 +318,7 @@ void fruitjam_usbhost_loop1() {
     }
   }
 
-  // Check for manual recovery request (BUTTON2 press)
+  // Check for manual recovery request (BUTTON1 press)
   if (usbh_manual_reset_requested && !usbh_resetting) {
     usbh_manual_reset_requested = false;
     usbh_start_reset();
