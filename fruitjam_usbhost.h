@@ -35,6 +35,7 @@
 #include "pio_usb.h"
 #include "Adafruit_TinyUSB.h"
 #include "hardware/dma.h"
+#include "hardware/sync.h"
 #include "hardware/structs/iobank0.h"
 #include "hardware/structs/sio.h"
 
@@ -73,6 +74,13 @@ static volatile bool usbh_manual_reset_requested = false;
 static volatile uint32_t usbh_core1_heartbeat_ms = 0;
 
 #define USBH_HEARTBEAT_TIMEOUT_MS  5000  // core0 triggers emergency reset after this
+
+// ---- Manual SOF frame timing (skip_alarm_pool mode) ----
+// Instead of the PIO USB library using a timer alarm IRQ to call the SOF
+// handler every 1ms, we call pio_usb_host_frame() ourselves from loop1()
+// with interrupts disabled. TinyUSB's blocking delays during enumeration
+// are overridden (tusb_time_delay_ms_api) to keep SOF frames running.
+static uint32_t usbh_last_frame_us = 0;
 
 // ---- Ring buffer for keyboard input (shared between cores) ----
 
@@ -351,6 +359,25 @@ static void kbd_handle_repeat() {
   }
 }
 
+// ---- TinyUSB delay override ----
+// TinyUSB calls tusb_time_delay_ms_api() during enumeration (bus reset,
+// address recovery, etc.) with blocking delays of 10-50ms. With the alarm
+// pool disabled (skip_alarm_pool=true), no SOF frames are sent during these
+// delays because our manual pio_usb_host_frame() calls in loop1() can't run.
+// Override the weak default to keep calling pio_usb_host_frame() during waits.
+extern "C" void tusb_time_delay_ms_api(uint32_t ms) {
+  uint32_t start = millis();
+  while ((millis() - start) < ms) {
+    uint32_t now_us = micros();
+    if ((now_us - usbh_last_frame_us) >= 1000) {
+      usbh_last_frame_us = now_us;
+      uint32_t status = save_and_disable_interrupts();
+      pio_usb_host_frame();
+      restore_interrupts(status);
+    }
+  }
+}
+
 // ---- Core1 setup/loop ----
 
 void fruitjam_usbhost_setup1() {
@@ -375,11 +402,16 @@ void fruitjam_usbhost_setup1() {
 
   // Configure PIO USB — use PIO 2 (RP2350 has 3 PIOs) to avoid conflicts.
   // DVHSTX claims DMA channels 0-2, so use channel 3.
+  // skip_alarm_pool=true: we call pio_usb_host_frame() manually from loop1()
+  // every 1ms with interrupts disabled, instead of letting the library use a
+  // timer alarm IRQ. This prevents other interrupts from disrupting PIO USB
+  // bus timing during transfers.
   pio_usb_configuration_t pio_cfg = PIO_USB_DEFAULT_CONFIG;
   pio_cfg.pin_dp = PIN_USB_HOST_DP;
   pio_cfg.pio_tx_num = 2;
   pio_cfg.pio_rx_num = 2;
   pio_cfg.tx_ch = 3;  // pio_usb_bus_init() claims this internally
+  pio_cfg.skip_alarm_pool = true;
 
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
 
@@ -388,11 +420,14 @@ void fruitjam_usbhost_setup1() {
 
   // Initialize heartbeat so core0 doesn't false-trigger before first loop1()
   usbh_core1_heartbeat_ms = millis();
+
+  // Initialize manual SOF frame timer
+  usbh_last_frame_us = micros();
 }
 
 // ---- Emergency PIO unstick (callable from core0 or ISR context) ----
 //
-// When core1 is locked in a PIO busy-wait (e.g., SOF timer callback waiting
+// When core1 is locked in a PIO busy-wait (e.g., pio_usb_host_frame() waiting
 // for PIO IRQ that never fires), flag-based recovery is useless — nobody on
 // core1 reads the flags. This function directly manipulates hardware registers
 // to break the deadlock:
@@ -485,8 +520,20 @@ void fruitjam_usbhost_loop1() {
         digitalWrite(PIN_5V_EN, PIN_5V_EN_STATE);
         usbh_power_restored = true;
       }
-      // Still run tuh_task so TinyUSB can detect the new connection
-      tuh_task_ext(10, false);
+    }
+    // During reset, still call pio_usb_host_frame() so the library can
+    // detect reconnection, and tuh_task so TinyUSB processes events.
+    // Fall through to the frame call below.
+    if (elapsed < (USBH_RESET_OFF_MS + USBH_RESET_SETTLE_MS)) {
+      // Call frame + tuh_task but skip the rest of loop1 during settle
+      uint32_t now_us = micros();
+      if ((now_us - usbh_last_frame_us) >= 1000) {
+        usbh_last_frame_us = now_us;
+        uint32_t status = save_and_disable_interrupts();
+        pio_usb_host_frame();
+        restore_interrupts(status);
+      }
+      tuh_task_ext(0, false);
       return;
     } else {
       // Phase 3: reset complete, resume normal operation
@@ -502,7 +549,20 @@ void fruitjam_usbhost_loop1() {
     return;
   }
 
-  tuh_task_ext(10, false);
+  // Manual SOF frame: call pio_usb_host_frame() every 1ms with interrupts
+  // disabled. This replaces the library's alarm pool timer.
+  uint32_t now_us = micros();
+  if ((now_us - usbh_last_frame_us) >= 1000) {
+    usbh_last_frame_us = now_us;
+    uint32_t status = save_and_disable_interrupts();
+    pio_usb_host_frame();
+    restore_interrupts(status);
+  }
+
+  // Non-blocking: process any pending TinyUSB events without waiting.
+  // We must not block here — loop1() needs to spin fast to call
+  // pio_usb_host_frame() every 1ms for SOF timing.
+  tuh_task_ext(0, false);
   kbd_handle_repeat();
 
   // If re-arm failed in the callback, retry it here every loop iteration.
