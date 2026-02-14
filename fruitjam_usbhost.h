@@ -124,6 +124,71 @@ static void usbh_check_core1_health() {
   }
 }
 
+// ---- Mouse HID tracking ----
+static volatile uint8_t  usbh_mouse_dev_addr = 0;
+static volatile uint8_t  usbh_mouse_instance = 0;
+static volatile bool     usbh_mouse_mounted = false;
+static volatile bool     usbh_mouse_armed = false;
+
+// ---- Generic HID report descriptor parsing ----
+// Non-boot-protocol mice need report descriptor parsing to identify them.
+#define MAX_HID_REPORTS 4
+#define MAX_HID_INSTANCES 12
+
+struct hid_instance_info_t {
+  uint8_t report_count;
+  tuh_hid_report_info_t report_info[MAX_HID_REPORTS];
+  bool has_mouse;
+};
+static hid_instance_info_t hid_info[MAX_HID_INSTANCES];
+
+// Process a boot-protocol mouse report
+static void process_mouse_report(hid_mouse_report_t const *report) {
+  int16_t nx = mouse_x + report->x / 2;
+  int16_t ny = mouse_y + report->y / 2;
+  if (nx < 0) nx = 0;
+  if (nx >= DISPLAY_WIDTH) nx = DISPLAY_WIDTH - 1;
+  if (ny < 0) ny = 0;
+  if (ny >= DISPLAY_HEIGHT) ny = DISPLAY_HEIGHT - 1;
+  mouse_x = nx;
+  mouse_y = ny;
+  uint8_t prev = mouse_buttons;
+  mouse_buttons = report->buttons;
+  if ((report->buttons & ~prev) != 0) mouse_clicked = true;
+}
+
+// Dispatch a generic (non-boot-protocol) HID report using parsed descriptor info.
+// Handles composite reports where byte 0 is report ID.
+static void process_generic_report(uint8_t instance,
+                                   uint8_t const *report, uint16_t len) {
+  if (instance >= MAX_HID_INSTANCES || len == 0) return;
+  uint8_t const rpt_count = hid_info[instance].report_count;
+  tuh_hid_report_info_t *rpt_info_arr = hid_info[instance].report_info;
+  tuh_hid_report_info_t *rpt_info = NULL;
+
+  if (rpt_count == 1 && rpt_info_arr[0].report_id == 0) {
+    // Simple report without report ID
+    rpt_info = &rpt_info_arr[0];
+  } else {
+    // Composite: first byte is report ID
+    uint8_t const rpt_id = report[0];
+    for (uint8_t i = 0; i < rpt_count; i++) {
+      if (rpt_id == rpt_info_arr[i].report_id) {
+        rpt_info = &rpt_info_arr[i];
+        break;
+      }
+    }
+    report++;
+    len--;
+  }
+  if (!rpt_info) return;
+  if (rpt_info->usage_page == HID_USAGE_PAGE_DESKTOP &&
+      rpt_info->usage == HID_USAGE_DESKTOP_MOUSE &&
+      len >= 3) {
+    process_mouse_report((hid_mouse_report_t const *)report);
+  }
+}
+
 // ---- USB Host object ----
 Adafruit_USBH_Host USBHost;
 
@@ -486,10 +551,8 @@ void tuh_umount_cb(uint8_t daddr) {
 
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
                       uint8_t const *desc_report, uint16_t desc_len) {
-  (void)desc_report;
-  (void)desc_len;
-
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
+
   if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
     usbh_hid_dev_addr = dev_addr;
     usbh_hid_instance = instance;
@@ -498,6 +561,35 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
     usbh_last_hid_cb_ms = millis();
     if (tuh_hid_receive_report(dev_addr, instance)) {
       usbh_hid_armed = true;
+    }
+  } else if (itf_protocol == HID_ITF_PROTOCOL_MOUSE) {
+    usbh_mouse_dev_addr = dev_addr;
+    usbh_mouse_instance = instance;
+    usbh_mouse_mounted = true;
+    usbh_mouse_armed = false;
+    if (tuh_hid_receive_report(dev_addr, instance)) {
+      usbh_mouse_armed = true;
+    }
+  } else if (itf_protocol == HID_ITF_PROTOCOL_NONE && instance < MAX_HID_INSTANCES) {
+    // Non-boot device — parse report descriptor to detect mouse
+    hid_info[instance].report_count = tuh_hid_parse_report_descriptor(
+      hid_info[instance].report_info, MAX_HID_REPORTS, desc_report, desc_len);
+    hid_info[instance].has_mouse = false;
+    for (uint8_t i = 0; i < hid_info[instance].report_count; i++) {
+      if (hid_info[instance].report_info[i].usage_page == HID_USAGE_PAGE_DESKTOP &&
+          hid_info[instance].report_info[i].usage == HID_USAGE_DESKTOP_MOUSE) {
+        hid_info[instance].has_mouse = true;
+        usbh_mouse_dev_addr = dev_addr;
+        usbh_mouse_instance = instance;
+        usbh_mouse_mounted = true;
+        usbh_mouse_armed = false;
+      }
+    }
+    // Arm reports for this device
+    if (!tuh_hid_receive_report(dev_addr, instance)) {
+      usbh_mouse_armed = false;
+    } else {
+      if (hid_info[instance].has_mouse) usbh_mouse_armed = true;
     }
   }
 }
@@ -508,37 +600,63 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
   kbd_last_keycode = 0;
   kbd_repeating = false;
   memset((void*)&kbd_prev_report, 0, sizeof(kbd_prev_report));
+  if (dev_addr == usbh_mouse_dev_addr && instance == usbh_mouse_instance) {
+    usbh_mouse_mounted = false;
+    usbh_mouse_armed = false;
+    mouse_buttons = 0;
+  }
+  if (instance < MAX_HID_INSTANCES) {
+    hid_info[instance].report_count = 0;
+    hid_info[instance].has_mouse = false;
+  }
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
                                 uint8_t const *report, uint16_t len) {
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-  // Track that we received a callback — pipeline is alive
-  usbh_last_hid_cb_ms = millis();
-  usbh_hid_armed = false;       // will be re-armed below
-  usbh_rearm_fail_since = 0;    // reset failure tracking
+  if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
+    // Track that we received a callback — pipeline is alive
+    usbh_last_hid_cb_ms = millis();
+    usbh_hid_armed = false;       // will be re-armed below
+    usbh_rearm_fail_since = 0;    // reset failure tracking
 
-  if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD && len >= sizeof(hid_keyboard_report_t)) {
-    usbh_zero_len_count = 0;  // good report — reset the watchdog
-    process_keyboard_report((hid_keyboard_report_t const *)report);
-  } else if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD && len == 0) {
-    // Zero-length keyboard report — connection is broken (PIO USB resumed
-    // low-level polling after a glitch but TinyUSB didn't re-enumerate).
-    // Power-cycle the USB port to force a clean re-enumeration.
-    usbh_zero_len_count++;
-    if (usbh_zero_len_count == USBH_ZERO_LEN_THRESHOLD) {
-      usbh_start_reset();
-      return;  // don't re-arm, we're resetting
+    if (len >= sizeof(hid_keyboard_report_t)) {
+      usbh_zero_len_count = 0;  // good report — reset the watchdog
+      process_keyboard_report((hid_keyboard_report_t const *)report);
+    } else if (len == 0) {
+      usbh_zero_len_count++;
+      if (usbh_zero_len_count == USBH_ZERO_LEN_THRESHOLD) {
+        usbh_start_reset();
+        return;  // don't re-arm, we're resetting
+      }
     }
-  }
 
-  // Re-arm for next report (unless we're in the middle of a reset)
-  if (!usbh_resetting) {
-    if (tuh_hid_receive_report(dev_addr, instance)) {
-      usbh_hid_armed = true;
+    // Re-arm for next keyboard report
+    if (!usbh_resetting) {
+      if (tuh_hid_receive_report(dev_addr, instance)) {
+        usbh_hid_armed = true;
+      }
     }
-    // If re-arm failed, usbh_hid_armed stays false → loop1 will retry
+  } else if (itf_protocol == HID_ITF_PROTOCOL_MOUSE) {
+    if (len >= 3) {  // minimum: buttons + x + y (hid_mouse_report_t is 5 but many mice send 3-4)
+      process_mouse_report((hid_mouse_report_t const *)report);
+    }
+    usbh_mouse_armed = false;
+    if (!usbh_resetting) {
+      if (tuh_hid_receive_report(dev_addr, instance)) {
+        usbh_mouse_armed = true;
+      }
+    }
+  } else if (instance < MAX_HID_INSTANCES && hid_info[instance].has_mouse) {
+    // Generic (non-boot) mouse — dispatch via parsed report descriptor
+    process_generic_report(instance, report, len);
+    usbh_mouse_armed = false;
+    if (!usbh_resetting) {
+      if (tuh_hid_receive_report(dev_addr, instance)) {
+        usbh_mouse_armed = true;
+      }
+    }
   }
 }
 

@@ -6,7 +6,7 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 ## What's New
 
-This fork adds USB keyboard input, an HDMI terminal + graphics display, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
+This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
@@ -17,13 +17,18 @@ This fork adds USB keyboard input, an HDMI terminal + graphics display, Wi-Fi ne
 - `(gfx-test)` built-in demo function
 - Terminal text persists through graphics mode — returns exactly where you left off
 
-### USB Host Keyboard (fruitjam_usbhost.h)
+### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
 
 - PIO USB host on core1 (PIO 2 / DMA channel 3 to avoid HSTX conflicts)
 - HID keyboard → 256-byte ring buffer → `gserial()` on core0
 - US keyboard layout with shift, ctrl, caps lock
 - Key repeat (500ms delay, 50ms rate)
 - Automatic recovery from PIO USB deaf states and core1 lockups
+- **USB mouse** with boot-protocol and generic HID report descriptor parsing
+- Mouse cursor: 8×8 arrow sprite with save-under buffer, auto-hidden during draw calls
+- `(mouse-x)`, `(mouse-y)`, `(mouse-buttons)`, `(mouse-click)` — read mouse state from Lisp
+- `(mouse-show)`, `(mouse-hide)` — show/hide the cursor in graphics mode
+- `(paint)` — built-in mouse-driven drawing demo
 
 ### Hardware Escape Button (fruitjam_escape.h)
 
@@ -51,7 +56,7 @@ This fork adds USB keyboard input, an HDMI terminal + graphics display, Wi-Fi ne
 
 ```
 Core 0: uLisp interpreter + display (DVHSTX8 400×300)
-Core 1: USB host keyboard (PIO USB via TinyUSB)
+Core 1: USB host keyboard + mouse (PIO USB via TinyUSB)
 
 Hardware interrupt: BUTTON1 (GPIO0) → escape to REPL
 ```
@@ -94,11 +99,13 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 
 ## Future Work
 
-- **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
 - **Audio** — TLV320DAC3100 I2S DAC for sound output
+- **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Line editor** — enable uLisp's built-in tab completion, paren highlighting, and command recall on HDMI
 - **Autorun** — boot directly into a saved program from SD card
+- **Buttons / NeoPixels** — expose BUTTON2/3 and the 5 onboard NeoPixels to Lisp
+- **USB Gamepad** — HID gamepad input for games
 
 ## Links
 

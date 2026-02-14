@@ -27,7 +27,19 @@ const char LispLibrary[] =
     "(set-cursor 10 30) "
     "(set-text-size 1) "
     "(set-text-color 223 128) "
-    "(with-gfx (s) (princ \"Press escape button to return\" s))))"
+    "(with-gfx (s) (princ \"Press escape button to return\" s)))) "
+"(defun paint () "
+  "(graphics-mode) "
+  "(fill-screen 0) "
+  "(set-cursor 2 2) "
+  "(set-text-color 170) "
+  "(with-gfx (s) (princ \"Paint: click to draw, escape to quit\" s)) "
+  "(mouse-show) "
+  "(let ((col 255) (sz 3)) "
+    "(loop "
+      "(when (> (mouse-buttons) 0) "
+        "(fill-circle (mouse-x) (mouse-y) sz col)) "
+      "(delay 8))))"
 ;
 
 
@@ -2981,6 +2993,7 @@ void WiFiwrite (char c) { client.write(c); }
 void gfxwrite (char c) {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   if (!fruitjam_gfx_active) return;
+  mouse_hide_for_draw();
   #endif
   tft.write(c);
 }
@@ -7592,6 +7605,85 @@ object *fn_textmode (object *args, object *env) {
   #endif
 }
 
+/*
+  (mouse-x)
+  Returns the current mouse cursor X position (0 to 399).
+*/
+object *fn_mousex (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  return number(mouse_x);
+  #else
+  return number(0);
+  #endif
+}
+
+/*
+  (mouse-y)
+  Returns the current mouse cursor Y position (0 to 299).
+*/
+object *fn_mousey (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  return number(mouse_y);
+  #else
+  return number(0);
+  #endif
+}
+
+/*
+  (mouse-buttons)
+  Returns the mouse button state as a bitmask: bit 0 = left, bit 1 = right, bit 2 = middle.
+*/
+object *fn_mousebuttons (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  return number(mouse_buttons);
+  #else
+  return number(0);
+  #endif
+}
+
+/*
+  (mouse-click)
+  Returns t if a mouse button was clicked since last call, nil otherwise. Clears the flag.
+*/
+object *fn_mouseclick (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (mouse_clicked) {
+    mouse_clicked = false;
+    return tee;
+  }
+  #endif
+  return nil;
+}
+
+/*
+  (mouse-show)
+  Shows the mouse cursor in graphics mode. Returns nil.
+*/
+object *fn_mouseshow (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  mouse_cursor_visible = true;
+  #endif
+  return nil;
+}
+
+/*
+  (mouse-hide)
+  Hides the mouse cursor. Returns nil.
+*/
+object *fn_mousehide (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  mouse_erase_cursor();
+  mouse_cursor_visible = false;
+  #endif
+  return nil;
+}
+
 // Built-in symbol names
 const char string0[] = "nil";
 const char string1[] = "t";
@@ -8019,6 +8111,12 @@ const char string266[] = ":gpio-oe-xor";
 #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
 const char string267[] = "graphics-mode";
 const char string268[] = "text-mode";
+const char string269[] = "mouse-x";
+const char string270[] = "mouse-y";
+const char string271[] = "mouse-buttons";
+const char string272[] = "mouse-click";
+const char string273[] = "mouse-show";
+const char string274[] = "mouse-hide";
 #endif
 #elif defined(CPU_RA4M1)
 const char string254[] = ":input";
@@ -8619,6 +8717,18 @@ const char doc267[] = "(graphics-mode)\n"
 "Switches the display to graphics mode (400x300, 256 colours). Returns t on success.";
 const char doc268[] = "(text-mode)\n"
 "Switches the display back to text mode (66x37 terminal). Returns t.";
+const char doc269[] = "(mouse-x)\n"
+"Returns the current mouse cursor X position (0 to 399).";
+const char doc270[] = "(mouse-y)\n"
+"Returns the current mouse cursor Y position (0 to 299).";
+const char doc271[] = "(mouse-buttons)\n"
+"Returns the mouse button state as a bitmask: bit 0 = left, bit 1 = right, bit 2 = middle.";
+const char doc272[] = "(mouse-click)\n"
+"Returns t if a mouse button was clicked since last call, nil otherwise. Clears the flag.";
+const char doc273[] = "(mouse-show)\n"
+"Shows the mouse cursor in graphics mode. Returns nil.";
+const char doc274[] = "(mouse-hide)\n"
+"Hides the mouse cursor. Returns nil.";
 #endif
 
 // Built-in symbol lookup table
@@ -9049,6 +9159,12 @@ const tbl_entry_t lookup_table[] = {
 #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   { string267, fn_graphicsmode, 0200, doc267 },
   { string268, fn_textmode, 0200, doc268 },
+  { string269, fn_mousex, 0200, doc269 },
+  { string270, fn_mousey, 0200, doc270 },
+  { string271, fn_mousebuttons, 0200, doc271 },
+  { string272, fn_mouseclick, 0200, doc272 },
+  { string273, fn_mouseshow, 0200, doc273 },
+  { string274, fn_mousehide, 0200, doc274 },
 #endif
 #elif defined(CPU_RA4M1)
   { string254, (fn_ptr_type)INPUT, PINMODE, NULL },
@@ -9144,6 +9260,7 @@ void testescape () {
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
     error2("escape!");
   }
+  mouse_update_cursor();
   #endif
   static unsigned long n;
   if (millis()-n < 500) return;
