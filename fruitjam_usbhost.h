@@ -1,8 +1,8 @@
-// fruitjam_usbhost.h — USB Host keyboard support for Fruit Jam
+// fruitjam_usbhost.h — USB Host keyboard/mouse support for Fruit Jam
 // Runs TinyUSB host via PIO USB on core1 (setup1/loop1)
 // Provides a ring buffer of ASCII characters for gserial() on core0
 //
-// USB recovery mechanisms (PIO USB is prone to going deaf):
+// USB recovery mechanisms:
 //
 //   1. Zero-length reports: PIO USB can resume low-level polling after a glitch
 //      but TinyUSB doesn't re-enumerate, producing len=0 HID reports. Detected
@@ -13,16 +13,11 @@
 //      value and retrying every loop1() iteration. If retries fail for 5s,
 //      power-cycle.
 //
-//   3. PIO USB deaf state: the PIO state machine goes completely unresponsive.
-//      Re-arm "succeeds" (returns true) but callbacks never fire. Physical
-//      disconnect is not detected. Caught by a 15s last-resort timeout on
-//      HID callback activity. Power-cycles to recover.
-//
-//   4. Manual recovery: BUTTON1 (escape button) sets a flag requesting USB
+//   3. Manual recovery: BUTTON1 (escape button) sets a flag requesting USB
 //      power-cycle. If core1 is alive, it picks this up in loop1() and does
-//      a normal 5V power-cycle. If core1 is locked, mechanism 5 handles it.
+//      a normal 5V power-cycle. If core1 is locked, mechanism 4 handles it.
 //
-//   5. Core0 auto-recovery (5s heartbeat): Core1 updates a heartbeat timestamp
+//   4. Core0 auto-recovery (5s heartbeat): Core1 updates a heartbeat timestamp
 //      every loop1() iteration. Core0 checks from the gserial() input wait
 //      loop. If the heartbeat stalls for 5s (core1 stuck despite library
 //      timeouts), core0 triggers emergency PIO unstick — directly cuts 5V,
@@ -59,12 +54,10 @@ static volatile bool     usbh_power_restored = false;  // phase tracking for res
 #define USBH_RESET_SETTLE_MS    500   // wait after re-enabling 5V before resuming
 
 // ---- HID pipeline health ----
-static volatile uint32_t usbh_last_hid_cb_ms = 0;    // millis() of last HID callback (any len)
 static volatile bool     usbh_hid_armed = false;      // true when receive_report is active
 static volatile uint32_t usbh_rearm_fail_since = 0;   // millis() when re-arm first failed (0=ok)
 
 #define USBH_REARM_FAIL_TIMEOUT_MS  5000   // power-cycle after re-arm fails for this long
-#define USBH_DEAD_SILENCE_MS       15000   // power-cycle if mounted but no callbacks for 15s
 
 // ---- Manual USB recovery (triggered by BUTTON1 escape, see fruitjam_escape.h) ----
 static volatile bool usbh_manual_reset_requested = false;
@@ -418,6 +411,15 @@ void fruitjam_usbhost_setup1() {
   tusb_rhport_init_t host_init = { .role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_AUTO };
   tusb_init(1, &host_init);
 
+  // Give PIO USB's DMA channel high priority over HSTX video (ch 0-2) and
+  // audio (ch 4). Without this, all 5 channels are low-priority round-robin,
+  // and PIO USB gets only 1-in-5 DMA scheduling slots. USB bit-banging at
+  // 12 Mbps is extremely timing-sensitive — any delay in refilling the PIO TX
+  // FIFO can corrupt a packet, leading to transaction failures that cascade
+  // into device disconnects. HIGH_PRIORITY ensures PIO USB's DMA is serviced
+  // before all low-priority channels in every scheduling round.
+  hw_set_bits(&dma_hw->ch[pio_cfg.tx_ch].al1_ctrl, DMA_CH0_CTRL_TRIG_HIGH_PRIORITY_BITS);
+
   // Initialize heartbeat so core0 doesn't false-trigger before first loop1()
   usbh_core1_heartbeat_ms = millis();
 
@@ -481,6 +483,10 @@ static void fruitjam_usb_emergency_reset() {
   usbh_hid_armed = false;
   usbh_rearm_fail_since = 0;
   usbh_power_restored = false;
+  usbh_hid_dev_addr = 0;
+  usbh_mouse_dev_addr = 0;
+  usbh_mouse_mounted = false;
+  usbh_mouse_armed = false;
 }
 
 // Power-cycle the USB 5V rail to force a full re-enumeration.
@@ -492,6 +498,12 @@ static void usbh_start_reset() {
   usbh_hid_armed = false;
   usbh_rearm_fail_since = 0;
   usbh_power_restored = false;
+  // Clear device addresses so stale re-arm attempts don't fire on old addresses
+  // after the device re-enumerates (it may get a different address)
+  usbh_hid_dev_addr = 0;
+  usbh_mouse_dev_addr = 0;
+  usbh_mouse_mounted = false;
+  usbh_mouse_armed = false;
 
   // Kill 5V power to the USB port
   digitalWrite(PIN_5V_EN, !PIN_5V_EN_STATE);
@@ -584,15 +596,9 @@ void fruitjam_usbhost_loop1() {
     }
   }
 
-  // Last-resort auto-recovery: PIO USB is completely deaf.
-  // Re-arm "succeeds" (returns true) but callbacks never fire.
-  // Physical disconnect not detected. Only detectable by time.
-  // 60s is conservative — won't trigger during normal thinking pauses.
-  if (usbh_mounted && !usbh_resetting && usbh_hid_armed &&
-      usbh_last_hid_cb_ms != 0 &&
-      (millis() - usbh_last_hid_cb_ms) >= USBH_DEAD_SILENCE_MS) {
-    usbh_start_reset();
-  }
+  // WARNING: Do NOT add a "no HID callbacks for N seconds" timeout here.
+  // USB HID interrupt endpoints only report when state changes — an idle
+  // keyboard with no keys pressed produces zero callbacks, which is normal.
 }
 
 // ---- TinyUSB HID Host callbacks (called from core1 context) ----
@@ -618,7 +624,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
     usbh_hid_instance = instance;
     usbh_hid_armed = false;
     usbh_rearm_fail_since = 0;
-    usbh_last_hid_cb_ms = millis();
     if (tuh_hid_receive_report(dev_addr, instance)) {
       usbh_hid_armed = true;
     }
@@ -676,8 +681,6 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance,
   uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
   if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
-    // Track that we received a callback — pipeline is alive
-    usbh_last_hid_cb_ms = millis();
     usbh_hid_armed = false;       // will be re-armed below
     usbh_rearm_fail_since = 0;    // reset failure tracking
 
