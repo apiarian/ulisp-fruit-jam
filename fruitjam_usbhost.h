@@ -13,9 +13,10 @@
 //      value and retrying every loop1() iteration. If retries fail for 5s,
 //      power-cycle.
 //
-//   3. Manual recovery: BUTTON1 (escape button) sets a flag requesting USB
+//   3. Manual recovery: BUTTON1 long press (>=1s) sets a flag requesting USB
 //      power-cycle. If core1 is alive, it picks this up in loop1() and does
 //      a normal 5V power-cycle. If core1 is locked, mechanism 4 handles it.
+//      A short press only triggers the Lisp escape (no USB reset).
 //
 //   4. Core0 auto-recovery (5s heartbeat): Core1 updates a heartbeat timestamp
 //      every loop1() iteration. Core0 checks from the gserial() input wait
@@ -59,7 +60,7 @@ static volatile uint32_t usbh_rearm_fail_since = 0;   // millis() when re-arm fi
 
 #define USBH_REARM_FAIL_TIMEOUT_MS  5000   // power-cycle after re-arm fails for this long
 
-// ---- Manual USB recovery (triggered by BUTTON1 escape, see fruitjam_escape.h) ----
+// ---- Manual USB recovery (triggered by BUTTON1 long press, see fruitjam_escape.h) ----
 static volatile bool usbh_manual_reset_requested = false;
 
 // ---- Core1 heartbeat (for core0 auto-recovery, mechanism 5) ----
@@ -553,7 +554,7 @@ void fruitjam_usbhost_loop1() {
     }
   }
 
-  // Check for manual recovery request (BUTTON1 press, if not already
+  // Check for manual recovery request (BUTTON1 long press, if not already
   // handled by emergency reset)
   if (usbh_manual_reset_requested && !usbh_resetting) {
     usbh_manual_reset_requested = false;

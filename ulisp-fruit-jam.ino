@@ -10753,6 +10753,20 @@ void setup1 () {
   fruitjam_usbhost_setup1();
 }
 void loop1 () {
+  // Check for BUTTON1 long press (>=1s) to trigger USB power-cycle.
+  // Short press only triggers Lisp escape; long press also resets USB.
+  // Must be checked here (not in fruitjam_usbhost.h) because both
+  // fruitjam_usbhost.h and fruitjam_escape.h variables are needed.
+  if (escape_button_press_time != 0 && !usbh_manual_reset_requested) {
+    if (digitalRead(PIN_BUTTON1) == HIGH) {
+      // Button released — short press only, no USB reset
+      escape_button_press_time = 0;
+    } else if ((millis() - escape_button_press_time) >= ESCAPE_LONG_PRESS_MS) {
+      // Held for >=1s — trigger USB reset
+      escape_button_press_time = 0;
+      usbh_manual_reset_requested = true;
+    }
+  }
   fruitjam_usbhost_loop1();
 }
 #endif

@@ -33,7 +33,8 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 ### Hardware Escape Button (fruitjam_escape.h)
 
 - BUTTON1 (GPIO0) configured as a GPIO interrupt
-- Press it at any time to abort a running program and return to the REPL
+- **Short press:** abort a running program and return to the REPL
+- **Long press (≥1s):** also triggers USB host power-cycle recovery (forces keyboard re-enumeration)
 - Works even if USB host or the Lisp program is hung
 - If in graphics mode, automatically switches back to text mode
 - Silences all audio voices immediately (no notes left playing after abort)
