@@ -77,6 +77,12 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **12 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`
 
+### Button Input
+
+- `(button n)` — returns `t` if button n (1–3) is pressed, `nil` otherwise
+- BUTTON2 (GPIO4) and BUTTON3 (GPIO5) are the primary buttons for user programs
+- BUTTON1 (GPIO0) is readable but not practically useful from Lisp — its escape interrupt fires on press before the result can be used
+
 ### SD Card Support
 
 - `save-image` / `load-image` save and restore the entire workspace to MicroSD
@@ -147,7 +153,7 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Line editor** — enable uLisp's built-in tab completion, paren highlighting, and command recall on HDMI
 - **Autorun** — boot directly into a saved program from SD card
-- **Buttons / NeoPixels** — expose BUTTON2/3 and the 5 onboard NeoPixels to Lisp
+- **NeoPixels** — expose the 5 onboard NeoPixels to Lisp
 - **USB Gamepad** — HID gamepad input for games
 
 ## Links

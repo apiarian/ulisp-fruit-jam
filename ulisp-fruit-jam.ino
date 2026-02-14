@@ -8022,6 +8022,23 @@ object *fn_audiooutput (object *args, object *env) {
   return nil;
 }
 
+object *fn_button (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int n = checkinteger(first(args));
+  uint8_t pin;
+  switch (n) {
+    case 1: pin = PIN_BUTTON1; break;
+    case 2: pin = PIN_BUTTON2; break;
+    case 3: pin = PIN_BUTTON3; break;
+    default: error("button 1-3", first(args)); return nil;
+  }
+  return digitalRead(pin) == LOW ? tee : nil;
+  #else
+  return nil;
+  #endif
+}
+
 // Built-in symbol names
 const char string0[] = "nil";
 const char string1[] = "t";
@@ -8467,6 +8484,7 @@ const char string283[] = "audio-envelope";
 const char string284[] = "audio-trigger";
 const char string285[] = "audio-release";
 const char string286[] = "audio-output";
+const char string287[] = "button";
 #endif
 #elif defined(CPU_RA4M1)
 const char string254[] = ":input";
@@ -9105,6 +9123,11 @@ const char doc285[] = "(audio-release voice)\n"
 "Starts the release phase on voice (0-4), fading to silence.";
 const char doc286[] = "(audio-output mode)\n"
 "Sets output routing: 0=auto (headphone detect), 1=speaker, 2=headphone, 3=both.";
+const char doc287[] = "(button n)\n"
+"Returns t if button n (1-3) is currently pressed, or nil if not.\n"
+"Note: button 1 is the escape button. Its interrupt fires on press,\n"
+"so polling it in a loop will trigger an escape before the result\n"
+"can be used. Use buttons 2 and 3 for interactive input.";
 #endif
 
 // Built-in symbol lookup table
@@ -9553,6 +9576,7 @@ const tbl_entry_t lookup_table[] = {
   { string284, fn_audiotrigger, 0211, doc284 },
   { string285, fn_audiorelease, 0211, doc285 },
   { string286, fn_audiooutput, 0211, doc286 },
+  { string287, fn_button, 0211, doc287 },
 #endif
 #elif defined(CPU_RA4M1)
   { string254, (fn_ptr_type)INPUT, PINMODE, NULL },
@@ -10633,6 +10657,8 @@ void initgfx () {
       for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
     }
     fruitjam_escape_setup();
+    pinMode(PIN_BUTTON2, INPUT_PULLUP);
+    pinMode(PIN_BUTTON3, INPUT_PULLUP);
     #if defined(ULISP_WIFI)
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     #endif
