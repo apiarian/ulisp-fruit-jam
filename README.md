@@ -6,7 +6,7 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 ## What's New
 
-This fork adds USB keyboard input, an HDMI terminal + graphics display, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
+This fork adds USB keyboard input, an HDMI terminal + graphics display, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
@@ -37,6 +37,15 @@ This fork adds USB keyboard input, an HDMI terminal + graphics display, and a ha
 
 - `save-image` / `load-image` save and restore the entire workspace to MicroSD
 - `with-sd-card` provides text file I/O for reading/writing `.lsp` source files
+
+### Wi-Fi (via ESP32-C6)
+
+- Onboard ESP32-C6 coprocessor over SPI, using the `WiFiNINA - Adafruit Fork` library
+- `(wifi-connect "ssid" "password")` — connect to a network, returns IP address
+- `(wifi-localip)` — current IP address
+- `(get-time)` — current date/time via NTP (requires Wi-Fi connection)
+- `(with-client (str "host" port) ...)` — HTTP requests and TCP connections
+- `(wifi-server)`, `(wifi-softap ...)` — run a server or create an access point
 
 ## Architecture
 
@@ -85,10 +94,9 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 
 ## Future Work
 
-- **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
-- **Wi-Fi** — ESP32-C6 via SPI (WiFiNINA pattern, same as PyPortal)
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
 - **Audio** — TLV320DAC3100 I2S DAC for sound output
+- **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Line editor** — enable uLisp's built-in tab completion, paren highlighting, and command recall on HDMI
 - **Autorun** — boot directly into a saved program from SD card
 
