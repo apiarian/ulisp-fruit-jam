@@ -392,7 +392,8 @@ const char LispLibrary[] =
   #define STACKDIFF 520
   #endif
   #define CODESIZE 256                    /* Bytes */
-  //#define ULISP_WIFI
+  #define ULISP_WIFI
+  #include <WiFiNINA.h>
   #define LITTLEFS
   #include <LittleFS.h>
   #define FS_FILE_WRITE "w"
@@ -10121,6 +10122,9 @@ void initgfx () {
       for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
     }
     fruitjam_escape_setup();
+    #if defined(ULISP_WIFI)
+    WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
+    #endif
   #endif
   #if defined(gfxsupport)
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
