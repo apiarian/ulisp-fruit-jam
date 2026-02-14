@@ -28,6 +28,111 @@ const char LispLibrary[] =
     "(set-text-size 1) "
     "(set-text-color 223 128) "
     "(with-gfx (s) (princ \"Press escape button to return\" s)))) "
+"(defun audio-test (&optional vol) "
+  "(let ((v (or vol 160))) "
+  "(audio-wave 0 1) "
+  "(audio-vol 0 v) "
+  "(princ \"Sine wave scale...\") (terpri) "
+  "(dolist (n '(60 62 64 65 67 69 71 72)) "
+    "(audio-note 0 n) (delay 250)) "
+  "(audio-stop 0) (delay 200) "
+  "(princ \"Square wave arpeggio...\") (terpri) "
+  "(audio-wave 0 2) "
+  "(audio-vol 0 (truncate (* v 3) 4)) "
+  "(dotimes (i 3) "
+    "(dolist (n '(48 52 55 60)) "
+      "(audio-note 0 n) (delay 150))) "
+  "(audio-stop 0) (delay 200) "
+  "(princ \"Chord: C major\") (terpri) "
+  "(let ((cv (truncate (* v 5) 8)) (bv (truncate (* v 3) 8))) "
+  "(audio-wave 0 1) (audio-wave 1 1) (audio-wave 2 1) (audio-wave 3 4) "
+  "(audio-vol 0 cv) (audio-vol 1 cv) (audio-vol 2 cv) (audio-vol 3 bv) "
+  "(audio-note 0 60) (audio-note 1 64) (audio-note 2 67) (audio-note 3 48) "
+  "(delay 1500) "
+  "(princ \"Chord: F major\") (terpri) "
+  "(audio-note 0 65) (audio-note 1 69) (audio-note 2 72) (audio-note 3 53) "
+  "(delay 1500) "
+  "(princ \"Chord: G major\") (terpri) "
+  "(audio-note 0 67) (audio-note 1 71) (audio-note 2 74) (audio-note 3 55) "
+  "(delay 1500) "
+  "(princ \"Chord: C major\") (terpri) "
+  "(audio-note 0 72) (audio-note 1 76) (audio-note 2 79) (audio-note 3 60) "
+  "(delay 2000) "
+  "(audio-stop-all) "
+  "(princ \"Done.\") (terpri)))) "
+"(defun noise-test (&optional vol) "
+  "(let ((v (or vol 160))) "
+  "(audio-wave 4 5) "
+  "(princ \"Noise sweep low to high...\") (terpri) "
+  "(audio-vol 4 (truncate (* v 3) 4)) "
+  "(dotimes (i 20) "
+    "(audio-freq 4 (+ 100 (* i 400))) "
+    "(delay 150)) "
+  "(audio-stop 4) (delay 200) "
+  "(princ \"Percussion hits...\") (terpri) "
+  "(dotimes (i 8) "
+    "(audio-wave 4 5) (audio-vol 4 v) "
+    "(audio-freq 4 (+ 2000 (random 6000))) "
+    "(delay 50) "
+    "(audio-vol 4 0) "
+    "(delay 150)) "
+  "(audio-stop-all) "
+  "(princ \"Done.\") (terpri))) "
+"(defun waveform-demo (&optional vol) "
+  "(let ((v (or vol 160))) "
+  "(princ \"Waveform comparison on voice 0:\") (terpri) "
+  "(dolist (wv '((1 \"Sine\") (2 \"Square\") (3 \"Triangle\") (4 \"Sawtooth\"))) "
+    "(princ \"  \") (princ (cadr wv)) (princ \"...\") (terpri) "
+    "(audio-wave 0 (car wv)) "
+    "(audio-vol 0 v) "
+    "(dolist (n '(60 64 67 72)) "
+      "(audio-note 0 n) (delay 200)) "
+    "(audio-stop 0) (delay 200)) "
+  "(princ \"Done.\") (terpri))) "
+"(defun poly-demo (&optional vol) "
+  "(let ((v (or vol 160))) "
+  "(princ \"Polyphony demo - 4 voice canon:\") (terpri) "
+  "(audio-wave 0 1) (audio-wave 1 3) (audio-wave 2 4) (audio-wave 3 1) "
+  "(audio-vol 0 (truncate (* v 3) 4)) (audio-vol 1 (truncate (* v 5) 8)) "
+  "(audio-vol 2 (truncate v 2)) (audio-vol 3 (truncate (* v 5) 8)) "
+  "(let ((melody '(60 62 64 65 67 65 64 62))) "
+    "(dotimes (beat 8) "
+      "(audio-note 0 (nth beat melody)) "
+      "(when (> beat 1) (audio-note 1 (nth (- beat 2) melody))) "
+      "(when (> beat 3) (audio-note 2 (nth (- beat 4) melody))) "
+      "(when (> beat 1) (audio-note 3 (- (nth (- beat 2) melody) 12))) "
+      "(delay 300))) "
+  "(delay 600) (audio-stop-all) "
+  "(princ \"Done.\") (terpri))) "
+"(defun envelope-demo (&optional vol) "
+  "(let ((v (or vol 160))) "
+  "(princ \"ADSR envelope demo\") (terpri) "
+  "(audio-wave 0 1) (audio-vol 0 v) "
+  "(audio-envelope 0 100 200 128 500) "
+  "(princ \"  Sine with ADSR (100/200/128/500)...\") (terpri) "
+  "(dolist (n '(60 64 67 72 67 64)) "
+    "(audio-note 0 n) (delay 400) "
+    "(audio-release 0) (delay 600)) "
+  "(audio-stop 0) (delay 200) "
+  "(princ \"  Plucky square (5/50/0/100)...\") (terpri) "
+  "(audio-wave 0 2) (audio-vol 0 v) "
+  "(audio-envelope 0 5 50 0 100) "
+  "(dolist (n '(48 55 52 60 48 55 52 60 48 55 52 60 67 64 60 55)) "
+    "(audio-note 0 n) (delay 120)) "
+  "(audio-stop 0) (delay 200) "
+  "(princ \"  Pad chord (500/300/200/1000)...\") (terpri) "
+  "(audio-wave 0 3) (audio-wave 1 1) (audio-wave 2 1) "
+  "(audio-vol 0 (truncate v 2)) (audio-vol 1 (truncate v 2)) (audio-vol 2 (truncate v 2)) "
+  "(audio-envelope 0 500 300 200 1000) "
+  "(audio-envelope 1 500 300 200 1000) "
+  "(audio-envelope 2 500 300 200 1000) "
+  "(audio-note 0 60) (audio-note 1 64) (audio-note 2 67) "
+  "(delay 2000) "
+  "(audio-release 0) (audio-release 1) (audio-release 2) "
+  "(delay 1500) "
+  "(audio-stop-all) "
+  "(audio-envelope 0 nil) (audio-envelope 1 nil) (audio-envelope 2 nil) "
+  "(princ \"Done.\") (terpri))) "
 "(defun paint () "
   "(graphics-mode) "
   "(fill-screen 0) "
@@ -414,6 +519,7 @@ const char LispLibrary[] =
   #define CPU_RP2350
   #include "fruitjam_terminal.h"
   #include "fruitjam_graphics.h"
+  #include "fruitjam_audio.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
   #include "fruitjam_escape.h"
@@ -7684,6 +7790,238 @@ object *fn_mousehide (object *args, object *env) {
   return nil;
 }
 
+/*
+  (audio-wave voice waveform)
+  Sets the waveform for a voice (0-4).
+  waveform can be: :sine, :square, :triangle, :sawtooth, :noise, :silence,
+  or a 1D array of 256 integers (-128 to 127) for a custom wavetable.
+*/
+object *fn_audiowave (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  object *wf = second(args);
+  if (integerp(wf)) {
+    // Accept integer waveform IDs directly: 0=silence, 1=sine, 2=square, 3=triangle, 4=sawtooth, 5=noise
+    int id = wf->integer;
+    if (id < 0 || id > 5) error("waveform id 0-5", wf);
+    audio_set_builtin_waveform(voice, (uint8_t)id);
+  } else if (arrayp(wf)) {
+    // Copy 256 values from uLisp array into C wavetable buffer
+    int bit;
+    audio_voice_t *v = &audio_voices[voice];
+    for (int i = 0; i < 256; i++) {
+      object *index = cons(number(i), NULL);
+      object *val = *getarray(wf, index, NULL, &bit);
+      int ival = checkinteger(val);
+      if (ival < -128) ival = -128;
+      if (ival > 127) ival = 127;
+      v->wavetable[i] = (int8_t)ival;
+    }
+    v->waveform_id = AUDIO_WAVE_CUSTOM;
+  } else {
+    error("expected integer (0-5) or array", wf);
+  }
+  #endif
+  return nil;
+}
+
+/*
+  (audio-freq voice frequency)
+  Sets the frequency in Hz for a voice (0-4). frequency can be integer or float.
+*/
+object *fn_audiofreq (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  float freq = checkintfloat(second(args));
+  audio_set_freq(voice, freq);
+  #endif
+  return nil;
+}
+
+/*
+  (audio-note voice midi-note)
+  Plays a MIDI note number on a voice (0-4). Middle C = 60, A4 = 69.
+  Triggers the envelope if one is set.
+*/
+object *fn_audionote (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  int note = checkinteger(second(args));
+  // MIDI note to Hz: freq = 440 * 2^((note - 69) / 12)
+  float freq = 440.0f * powf(2.0f, (note - 69) / 12.0f);
+  audio_set_freq(voice, freq);
+  // Auto-trigger envelope if configured
+  audio_trigger(voice);
+  #endif
+  return nil;
+}
+
+/*
+  (audio-vol voice level)
+  Sets the volume for a voice (0-4). level is 0-255.
+*/
+object *fn_audiovol (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  int vol = (int)checkintfloat(second(args));
+  if (vol < 0) vol = 0;
+  if (vol > 255) vol = 255;
+  audio_voices[voice].volume = (uint8_t)vol;
+  #endif
+  return nil;
+}
+
+/*
+  (audio-master-vol level)
+  Sets the master volume (0-255). Affects all voices.
+*/
+object *fn_audiomastervol (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int vol = (int)checkintfloat(first(args));
+  if (vol < 0) vol = 0;
+  if (vol > 255) vol = 255;
+  audio_master_vol = (uint8_t)vol;
+  #endif
+  return nil;
+}
+
+/*
+  (audio-stop voice)
+  Stops a voice (0-4): sets volume to 0 and resets phase.
+*/
+object *fn_audiostop (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  audio_voices[voice].volume = 0;
+  audio_voices[voice].phase = 0;
+  audio_voices[voice].phase_inc = 0;
+  audio_voices[voice].env.stage = ADSR_OFF;
+  audio_voices[voice].env.env_level = 0;
+  #endif
+  return nil;
+}
+
+/*
+  (audio-stop-all)
+  Stops all voices: sets all volumes to 0 and resets phase.
+*/
+object *fn_audiostopall (object *args, object *env) {
+  (void) args, (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  for (int i = 0; i < AUDIO_NUM_VOICES; i++) {
+    audio_voices[i].volume = 0;
+    audio_voices[i].phase = 0;
+    audio_voices[i].phase_inc = 0;
+    audio_voices[i].env.stage = ADSR_OFF;
+    audio_voices[i].env.env_level = 0;
+  }
+  #endif
+  return nil;
+}
+
+/*
+  (audio-playing voice)
+  Returns t if a voice (0-4) is active (has non-zero volume and frequency).
+*/
+object *fn_audioplaying (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  audio_voice_t *av = &audio_voices[voice];
+  if (av->phase_inc > 0 && av->volume > 0) {
+    // If envelope is enabled, check it's not done
+    if (av->env.enabled && av->env.stage == ADSR_DONE) return nil;
+    return tee;
+  }
+  #endif
+  return nil;
+}
+
+/*
+  (audio-envelope voice attack decay sustain release)
+  Sets ADSR envelope for voice (0-4). attack, decay, release in ms.
+  sustain is level 0-255. Pass nil as attack to clear the envelope.
+*/
+object *fn_audioenvelope (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  object *atk = second(args);
+  if (atk == nil) {
+    audio_clear_envelope(voice);
+  } else {
+    int a = checkinteger(atk);
+    object *rest = cddr(args);            // skip voice, attack
+    int d = checkinteger(car(rest));
+    int s = checkinteger(car(cdr(rest)));
+    int r = checkinteger(car(cdr(cdr(rest))));
+    if (s < 0) s = 0; if (s > 255) s = 255;
+    if (a < 0) a = 0; if (d < 0) d = 0; if (r < 0) r = 0;
+    audio_set_envelope(voice, (uint32_t)a, (uint32_t)d, (uint8_t)s, (uint32_t)r);
+  }
+  #endif
+  return nil;
+}
+
+/*
+  (audio-trigger voice)
+  Triggers the attack phase of the envelope on voice (0-4).
+  Called automatically by audio-note if an envelope is set.
+*/
+object *fn_audiotrigger (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  audio_trigger(voice);
+  #endif
+  return nil;
+}
+
+/*
+  (audio-release voice)
+  Starts the release phase of the envelope on voice (0-4).
+  Voice will fade to silence based on the release time.
+*/
+object *fn_audiorelease (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  audio_release(voice);
+  #endif
+  return nil;
+}
+
+/*
+  (audio-output mode)
+  Sets audio output routing. mode: 0=auto (switch on headphone detect),
+  1=speaker, 2=headphone, 3=both. Returns nil.
+*/
+object *fn_audiooutput (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int mode = checkinteger(first(args));
+  if (mode < 0 || mode > 3) error("mode 0-3", first(args));
+  audio_output_mode = (uint8_t)mode;
+  audio_apply_output_routing();
+  #endif
+  return nil;
+}
+
 // Built-in symbol names
 const char string0[] = "nil";
 const char string1[] = "t";
@@ -8117,6 +8455,18 @@ const char string271[] = "mouse-buttons";
 const char string272[] = "mouse-click";
 const char string273[] = "mouse-show";
 const char string274[] = "mouse-hide";
+const char string275[] = "audio-wave";
+const char string276[] = "audio-freq";
+const char string277[] = "audio-note";
+const char string278[] = "audio-vol";
+const char string279[] = "audio-master-vol";
+const char string280[] = "audio-stop";
+const char string281[] = "audio-stop-all";
+const char string282[] = "audio-playing";
+const char string283[] = "audio-envelope";
+const char string284[] = "audio-trigger";
+const char string285[] = "audio-release";
+const char string286[] = "audio-output";
 #endif
 #elif defined(CPU_RA4M1)
 const char string254[] = ":input";
@@ -8729,6 +9079,32 @@ const char doc273[] = "(mouse-show)\n"
 "Shows the mouse cursor in graphics mode. Returns nil.";
 const char doc274[] = "(mouse-hide)\n"
 "Hides the mouse cursor. Returns nil.";
+const char doc275[] = "(audio-wave voice waveform)\n"
+"Sets the waveform for voice (0-4). waveform: 0=silence, 1=sine, 2=square,\n"
+"3=triangle, 4=sawtooth, 5=noise, or a 256-element array of values -128 to 127.";
+const char doc276[] = "(audio-freq voice frequency)\n"
+"Sets the frequency in Hz for voice (0-4). Accepts integer or float.";
+const char doc277[] = "(audio-note voice midi-note)\n"
+"Plays a MIDI note on voice (0-4). Middle C = 60, A4 = 69.";
+const char doc278[] = "(audio-vol voice level)\n"
+"Sets volume for voice (0-4). level is 0-255.";
+const char doc279[] = "(audio-master-vol level)\n"
+"Sets the master volume (0-255) affecting all voices.";
+const char doc280[] = "(audio-stop voice)\n"
+"Stops voice (0-4): sets volume to 0 and resets phase.";
+const char doc281[] = "(audio-stop-all)\n"
+"Stops all voices.";
+const char doc282[] = "(audio-playing voice)\n"
+"Returns t if voice (0-4) is active (non-zero volume and frequency).";
+const char doc283[] = "(audio-envelope voice attack decay sustain release)\n"
+"Sets ADSR envelope for voice (0-4). attack/decay/release in ms, sustain 0-255.\n"
+"Pass nil as attack to clear the envelope.";
+const char doc284[] = "(audio-trigger voice)\n"
+"Triggers the attack phase of the envelope on voice (0-4).";
+const char doc285[] = "(audio-release voice)\n"
+"Starts the release phase on voice (0-4), fading to silence.";
+const char doc286[] = "(audio-output mode)\n"
+"Sets output routing: 0=auto (headphone detect), 1=speaker, 2=headphone, 3=both.";
 #endif
 
 // Built-in symbol lookup table
@@ -9165,6 +9541,18 @@ const tbl_entry_t lookup_table[] = {
   { string272, fn_mouseclick, 0200, doc272 },
   { string273, fn_mouseshow, 0200, doc273 },
   { string274, fn_mousehide, 0200, doc274 },
+  { string275, fn_audiowave, 0222, doc275 },
+  { string276, fn_audiofreq, 0222, doc276 },
+  { string277, fn_audionote, 0222, doc277 },
+  { string278, fn_audiovol, 0222, doc278 },
+  { string279, fn_audiomastervol, 0211, doc279 },
+  { string280, fn_audiostop, 0211, doc280 },
+  { string281, fn_audiostopall, 0200, doc281 },
+  { string282, fn_audioplaying, 0211, doc282 },
+  { string283, fn_audioenvelope, 0225, doc283 },
+  { string284, fn_audiotrigger, 0211, doc284 },
+  { string285, fn_audiorelease, 0211, doc285 },
+  { string286, fn_audiooutput, 0211, doc286 },
 #endif
 #elif defined(CPU_RA4M1)
   { string254, (fn_ptr_type)INPUT, PINMODE, NULL },
@@ -9258,9 +9646,15 @@ void testescape () {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   if (fruitjam_escape_check()) {
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
+    for (int i = 0; i < AUDIO_NUM_VOICES; i++) {
+      audio_voices[i].volume = 0;
+      audio_voices[i].phase_inc = 0;
+      audio_voices[i].env.stage = ADSR_OFF;
+    }
     error2("escape!");
   }
   mouse_update_cursor();
+  fruitjam_audio_fill();
   #endif
   static unsigned long n;
   if (millis()-n < 500) return;
@@ -10242,6 +10636,7 @@ void initgfx () {
     #if defined(ULISP_WIFI)
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     #endif
+    fruitjam_audio_init();
   #endif
   #if defined(gfxsupport)
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
