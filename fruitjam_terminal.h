@@ -25,6 +25,10 @@
 #ifndef FRUITJAM_NO_DISPLAY
 
 // ---- Display object — DVHSTX8 at 400×300 ----
+// Third arg = double_buffered (false = single-buffered).
+// Note: GFXcanvas8 buffer allocation is always suppressed by a hardcoded
+// `false` inside the DVHSTX8 constructor — the actual framebuffer is
+// malloc'd by the HSTX driver in begin().
 static DVHSTXPinout fruitjamPinConfig = ADAFRUIT_FRUIT_JAM_CFG;
 static DVHSTX8 display8(fruitjamPinConfig, DVHSTX_RESOLUTION_400x300, false);
 
