@@ -6,6 +6,39 @@
 
 // Lisp Library
 const char LispLibrary[] =
+// --- Keyboard key code constants ---
+// Printable keys return their ASCII code (e.g. 27=Escape, 13=Enter, 8=Backspace).
+// Special keys use codes >= 128, defined here for readability.
+"(defvar *key-up* 128) "
+"(defvar *key-down* 129) "
+"(defvar *key-left* 130) "
+"(defvar *key-right* 131) "
+"(defvar *key-home* 132) "
+"(defvar *key-end* 133) "
+"(defvar *key-pgup* 134) "
+"(defvar *key-pgdn* 135) "
+"(defvar *key-insert* 136) "
+"(defvar *key-f1* 137) "
+"(defvar *key-f2* 138) "
+"(defvar *key-f3* 139) "
+"(defvar *key-f4* 140) "
+"(defvar *key-f5* 141) "
+"(defvar *key-f6* 142) "
+"(defvar *key-f7* 143) "
+"(defvar *key-f8* 144) "
+"(defvar *key-f9* 145) "
+"(defvar *key-f10* 146) "
+"(defvar *key-f11* 147) "
+"(defvar *key-f12* 148) "
+// --- Keyboard modifier bitmasks (match either left or right) ---
+// Test with: (> (logand (key-mod k) *mod-ctrl*) 0)
+"(defvar *mod-ctrl* 17) "
+"(defvar *mod-shift* 34) "
+"(defvar *mod-alt* 68) "
+"(defvar *mod-super* 136) "
+// --- Keyboard helpers ---
+"(defun key-code (k) (logand k 255)) "
+"(defun key-mod (k) (logand (ash k -8) 255)) "
 // --- Helper: update NeoPixels to show current brush color ---
 "(defun demo-leds (r g b) "
   "(dotimes (i 5) "
@@ -70,7 +103,7 @@ const char LispLibrary[] =
     "(set-text-size 1) "
     "(set-cursor 80 24) "
     "(set-text-color 150 0) "
-    "(with-gfx (s) (princ \"Mouse:draw  B2:color  B3:size  Esc:quit\" s)) "
+    "(with-gfx (s) (princ \"Mouse:draw  c/B2:color  s/B3:size  x:clear  Esc:quit\" s)) "
     // draw separator line
     "(draw-line 0 38 399 38 64) "
     "(draw-line 0 280 399 280 64) "
@@ -78,8 +111,9 @@ const char LispLibrary[] =
     "(demo-ui ci colors sz col) "
     "(let ((cc (nth ci colors))) "
       "(demo-leds (nth 1 cc) (nth 2 cc) (nth 3 cc))) "
-    // show mouse
+    // show mouse + flush any stale keystrokes
     "(mouse-show) "
+    "(keyboard-flush) "
     // setup audio voices for UI sounds
     "(audio-wave 0 2) (audio-vol 0 100) "
     "(audio-envelope 0 5 150 0 300) "
@@ -123,6 +157,36 @@ const char LispLibrary[] =
               "(unless was-drawing (demo-blip)))) "
           "(setq was-drawing t)) "
         "(setq was-drawing nil)) "
+      // keyboard shortcuts
+      "(let ((k (keyboard))) "
+        "(when k "
+          "(let ((kc (key-code k))) "
+            "(cond "
+              // Escape — clean exit back to REPL
+              "((= kc 27) "
+                "(mouse-hide) "
+                "(audio-stop-all) "
+                "(pixels-clear) (pixels-show) "
+                "(text-mode) "
+                "(return)) "
+              // 'c' or 'C' — cycle color (same as button 2)
+              "((or (= kc 99) (= kc 67)) "
+                "(setq ci (mod (+ ci 1) (length colors))) "
+                "(setq col (car (nth ci colors))) "
+                "(demo-ui ci colors sz col) "
+                "(let ((cc (nth ci colors))) "
+                  "(demo-leds (nth 1 cc) (nth 2 cc) (nth 3 cc))) "
+                "(demo-click (+ 60 (* ci 2)))) "
+              // 's' or 'S' — cycle brush size (same as button 3)
+              "((or (= kc 115) (= kc 83)) "
+                "(setq si (mod (+ si 1) (length sizes))) "
+                "(setq sz (nth si sizes)) "
+                "(demo-ui ci colors sz col) "
+                "(demo-click (+ 72 (* si 3)))) "
+              // 'x' or 'X' — clear canvas
+              "((or (= kc 120) (= kc 88)) "
+                "(fill-rect 0 39 400 241 0) "
+                "(demo-click 48)))))) "
       "(delay 8))))"
 ;
 
@@ -8019,6 +8083,38 @@ object *fn_button (object *args, object *env) {
   #endif
 }
 
+object *fn_keyboard (object *args, object *env) {
+  (void) args; (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int ch = kbd_ring_get();
+  if (ch < 0) return nil;
+  return number(ch);
+  #else
+  return nil;
+  #endif
+}
+
+object *fn_waitkeyboard (object *args, object *env) {
+  (void) args; (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  while (!kbd_available()) {
+    testescape();
+    usbh_check_core1_health();
+  }
+  return number(kbd_ring_get());
+  #else
+  return nil;
+  #endif
+}
+
+object *fn_keyboardflush (object *args, object *env) {
+  (void) args; (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  kbd_ring_tail = kbd_ring_head;
+  #endif
+  return nil;
+}
+
 object *fn_pixelsbegin (object *args, object *env) {
   (void) args; (void) env;
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
@@ -8586,14 +8682,17 @@ const char string284[] = "audio-trigger";
 const char string285[] = "audio-release";
 const char string286[] = "audio-output";
 const char string287[] = "button";
-const char string288[] = "pixels-begin";
-const char string289[] = "pixels-clear";
-const char string290[] = "pixels-fill";
-const char string291[] = "pixels-set-pixel-color";
-const char string292[] = "pixels-color";
-const char string293[] = "pixels-color-hsv";
-const char string294[] = "pixels-show";
-const char string295[] = "pixels-rainbow";
+const char string288[] = "keyboard";
+const char string289[] = "wait-keyboard";
+const char string290[] = "keyboard-flush";
+const char string291[] = "pixels-begin";
+const char string292[] = "pixels-clear";
+const char string293[] = "pixels-fill";
+const char string294[] = "pixels-set-pixel-color";
+const char string295[] = "pixels-color";
+const char string296[] = "pixels-color-hsv";
+const char string297[] = "pixels-show";
+const char string298[] = "pixels-rainbow";
 #endif
 #elif defined(CPU_RA4M1)
 const char string254[] = ":input";
@@ -9237,27 +9336,40 @@ const char doc287[] = "(button n)\n"
 "Note: button 1 is the escape button. Its interrupt fires on press,\n"
 "so polling it in a loop will trigger an escape before the result\n"
 "can be used. Use buttons 2 and 3 for interactive input.";
-const char doc288[] = "(pixels-begin)\n"
+const char doc288[] = "(keyboard)\n"
+"Returns the next key from the keyboard buffer as an integer, or nil if no key\n"
+"is available. Non-blocking. The result encodes both the key and modifier state:\n"
+"  (key-code k) = key code (ASCII or *key-...* constant)\n"
+"  (key-mod k) = modifier bitmask\n"
+"Test modifiers with (> (logand (key-mod k) *mod-ctrl*) 0) etc.";
+const char doc289[] = "(wait-keyboard)\n"
+"Waits for a keypress and returns it as an integer. Blocks until a key is\n"
+"available. Supports escape (button 1) to abort. Returns the same encoding\n"
+"as (keyboard): low byte = key code, high byte = modifiers.";
+const char doc290[] = "(keyboard-flush)\n"
+"Discards all pending keys in the keyboard buffer. Useful when entering a\n"
+"game loop or switching modes to prevent stale keystrokes from leaking in.";
+const char doc291[] = "(pixels-begin)\n"
 "Configures the NeoPixel pin for output. Called automatically at boot.";
-const char doc289[] = "(pixels-clear)\n"
+const char doc292[] = "(pixels-clear)\n"
 "Sets all pixel colors to off in the buffer. Call (pixels-show) to update.";
-const char doc290[] = "(pixels-fill [color] [first] [count])\n"
+const char doc293[] = "(pixels-fill [color] [first] [count])\n"
 "Fills all or part of the NeoPixel strip with a packed 32-bit color (default 0).\n"
 "first, default 0, the first NeoPixel to fill.\n"
 "count, default all, the number of NeoPixels to fill.";
-const char doc291[] = "(pixels-set-pixel-color index color)\n"
+const char doc294[] = "(pixels-set-pixel-color index color)\n"
 "(pixels-set-pixel-color index red green blue)\n"
 "Sets a pixel's color using either a packed 32-bit RGB value,\n"
 "or separate red, green, blue components (0-255 each).";
-const char doc292[] = "(pixels-color red green blue [white])\n"
+const char doc295[] = "(pixels-color red green blue [white])\n"
 "Packs separate red, green, blue, and optional white values (0-255)\n"
 "into a single 32-bit color value.";
-const char doc293[] = "(pixels-color-hsv hue sat val)\n"
+const char doc296[] = "(pixels-color-hsv hue sat val)\n"
 "Converts hue (0-65535), saturation (0-255), and value (0-255)\n"
 "into a packed 32-bit RGB color.";
-const char doc294[] = "(pixels-show)\n"
+const char doc297[] = "(pixels-show)\n"
 "Transmits the pixel data buffer to the NeoPixels.";
-const char doc295[] = "(pixels-rainbow [first-hue] [cycles] [sat] [val] [gammify])\n"
+const char doc298[] = "(pixels-rainbow [first-hue] [cycles] [sat] [val] [gammify])\n"
 "Fills the NeoPixel strip with one or more cycles of hues.\n"
 "first-hue (0-65535), cycles (default 1), sat (0-255, default 255),\n"
 "val (0-255, default 255), gammify (default t). Call (pixels-show) to update.";
@@ -9710,14 +9822,17 @@ const tbl_entry_t lookup_table[] = {
   { string285, fn_audiorelease, 0211, doc285 },
   { string286, fn_audiooutput, 0211, doc286 },
   { string287, fn_button, 0211, doc287 },
-  { string288, fn_pixelsbegin, 0200, doc288 },
-  { string289, fn_pixelsclear, 0200, doc289 },
-  { string290, fn_pixelsfill, 0203, doc290 },
-  { string291, fn_pixelssetpixelcolor, 0224, doc291 },
-  { string292, fn_pixelscolor, 0234, doc292 },
-  { string293, fn_pixelscolorhsv, 0233, doc293 },
-  { string294, fn_pixelsshow, 0200, doc294 },
-  { string295, fn_pixelsrainbow, 0205, doc295 },
+  { string288, fn_keyboard, 0200, doc288 },
+  { string289, fn_waitkeyboard, 0200, doc289 },
+  { string290, fn_keyboardflush, 0200, doc290 },
+  { string291, fn_pixelsbegin, 0200, doc291 },
+  { string292, fn_pixelsclear, 0200, doc292 },
+  { string293, fn_pixelsfill, 0203, doc293 },
+  { string294, fn_pixelssetpixelcolor, 0224, doc294 },
+  { string295, fn_pixelscolor, 0234, doc295 },
+  { string296, fn_pixelscolorhsv, 0233, doc296 },
+  { string297, fn_pixelsshow, 0200, doc297 },
+  { string298, fn_pixelsrainbow, 0205, doc298 },
 #endif
 #elif defined(CPU_RA4M1)
   { string254, (fn_ptr_type)INPUT, PINMODE, NULL },
@@ -10656,7 +10771,7 @@ int gserial () {
         #endif
         usbh_check_core1_health();  // auto-recover if core1 is stuck
       }
-      int raw = kbd_available() ? (int)kbd_ring_get() : Serial.read();
+      int raw = kbd_available() ? (kbd_ring_get() & 0xFF) : Serial.read();
       ch = fruitjam_line_getchar(raw);
       if (ch >= 0) return (char)ch;
     }

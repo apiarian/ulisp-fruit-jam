@@ -433,7 +433,8 @@ static void fruitjam_pserial(char c) {
 // Features: editing, Tab autocomplete, parenthesis matching, Up arrow recall.
 // Adapted from PicoCalc/Cardputer uLisp machines.
 
-// Special key codes from USB keyboard (>= 0x80, set in fruitjam_usbhost.h)
+// Special key codes from USB keyboard (>= 0x80)
+// Must match KEY_CODE_* defines in fruitjam_usbhost.h
 #define KEY_UP    0x80
 #define KEY_DOWN  0x81
 #define KEY_LEFT  0x82

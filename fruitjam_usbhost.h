@@ -77,10 +77,17 @@ static volatile uint32_t usbh_core1_heartbeat_ms = 0;
 static uint32_t usbh_last_frame_us = 0;
 
 // ---- Ring buffer for keyboard input (shared between cores) ----
+//
+// Each entry is a uint16_t:
+//   High byte = HID modifier bitmask at time of keypress
+//   Low byte  = key code (ASCII or 0x80+ special key)
+//
+// The REPL (gserial) only uses the low byte; Lisp programs via (keyboard)
+// and (wait-keyboard) get the full 16-bit value.
 
 #define KBD_RINGBUF_SIZE 256
 
-static volatile uint8_t kbd_ringbuf[KBD_RINGBUF_SIZE];
+static volatile uint16_t kbd_ringbuf[KBD_RINGBUF_SIZE];
 static volatile uint16_t kbd_ring_head = 0;  // written by core1 (producer)
 static volatile uint16_t kbd_ring_tail = 0;  // read by core0 (consumer)
 
@@ -92,7 +99,7 @@ static inline bool kbd_ring_full() {
   return ((kbd_ring_head + 1) % KBD_RINGBUF_SIZE) == kbd_ring_tail;
 }
 
-static void kbd_ring_put(uint8_t c) {
+static void kbd_ring_put(uint16_t c) {
   if (!kbd_ring_full()) {
     kbd_ringbuf[kbd_ring_head] = c;
     kbd_ring_head = (kbd_ring_head + 1) % KBD_RINGBUF_SIZE;
@@ -101,9 +108,9 @@ static void kbd_ring_put(uint8_t c) {
 
 static int kbd_ring_get() {
   if (kbd_ring_empty()) return -1;
-  uint8_t c = kbd_ringbuf[kbd_ring_tail];
+  uint16_t c = kbd_ringbuf[kbd_ring_tail];
   kbd_ring_tail = (kbd_ring_tail + 1) % KBD_RINGBUF_SIZE;
-  return c;
+  return (int)c;
 }
 
 static inline bool kbd_available() {
@@ -196,7 +203,31 @@ Adafruit_USBH_Host USBHost;
 
 // ---- HID keycode to ASCII translation ----
 
+// Special key codes (0x80+) — used in both ASCII tables and exposed to Lisp
+#define KEY_CODE_UP      0x80
+#define KEY_CODE_DOWN    0x81
+#define KEY_CODE_LEFT    0x82
+#define KEY_CODE_RIGHT   0x83
+#define KEY_CODE_HOME    0x84
+#define KEY_CODE_END     0x85
+#define KEY_CODE_PGUP    0x86
+#define KEY_CODE_PGDN    0x87
+#define KEY_CODE_INSERT  0x88
+#define KEY_CODE_F1      0x89
+#define KEY_CODE_F2      0x8A
+#define KEY_CODE_F3      0x8B
+#define KEY_CODE_F4      0x8C
+#define KEY_CODE_F5      0x8D
+#define KEY_CODE_F6      0x8E
+#define KEY_CODE_F7      0x8F
+#define KEY_CODE_F8      0x90
+#define KEY_CODE_F9      0x91
+#define KEY_CODE_F10     0x92
+#define KEY_CODE_F11     0x93
+#define KEY_CODE_F12     0x94
+
 // US keyboard layout: HID keycode -> ASCII (unshifted)
+// Special keys (arrows, Home/End, PgUp/PgDn, F-keys) use 0x80+ codes above
 static const uint8_t hid_keycode_to_ascii_unshift[128] = {
   0,    0,    0,    0,    'a',  'b',  'c',  'd',  // 0x00-0x07
   'e',  'f',  'g',  'h',  'i',  'j',  'k',  'l',  // 0x08-0x0F
@@ -205,10 +236,15 @@ static const uint8_t hid_keycode_to_ascii_unshift[128] = {
   '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  // 0x20-0x27
   '\n', 0x1B, '\b', '\t', ' ',  '-',  '=',  '[',  // 0x28-0x2F (Enter, Esc, BS, Tab, Space, -, =, [)
   ']',  '\\', 0,    ';',  '\'', '`',  ',',  '.',  // 0x30-0x37
-  '/',  0,    0,    0,    0,    0,    0,    0,    // 0x38-0x3F (/, CapsLock, F1-F6)
-  0,    0,    0,    0,    0,    0,    0,    0,    // 0x40-0x47 (F7-F12, PrtSc, ScrLk)
-  0,    0,    0,    0,    0x7F, 0,    0,    0x83, // 0x48-0x4F (Pause, Ins, Home, PgUp, Del, End, PgDn, Right)
-  0x82, 0x81, 0x80, 0,    '/',  '*',  '-',  '+',  // 0x50-0x57 (Left, Down, Up, NumLk, KP/, KP*, KP-, KP+)
+  '/',  0,                                          // 0x38-0x39 (/, CapsLock)
+  KEY_CODE_F1,  KEY_CODE_F2,  KEY_CODE_F3,  KEY_CODE_F4,   // 0x3A-0x3D (F1-F4)
+  KEY_CODE_F5,  KEY_CODE_F6,                                // 0x3E-0x3F (F5-F6)
+  KEY_CODE_F7,  KEY_CODE_F8,  KEY_CODE_F9,  KEY_CODE_F10,  // 0x40-0x43 (F7-F10)
+  KEY_CODE_F11, KEY_CODE_F12, 0,    0,                      // 0x44-0x47 (F11-F12, PrtSc, ScrLk)
+  0,    KEY_CODE_INSERT, KEY_CODE_HOME, KEY_CODE_PGUP,      // 0x48-0x4B (Pause, Ins, Home, PgUp)
+  0x7F, KEY_CODE_END, KEY_CODE_PGDN, KEY_CODE_RIGHT,       // 0x4C-0x4F (Del, End, PgDn, Right)
+  KEY_CODE_LEFT, KEY_CODE_DOWN, KEY_CODE_UP, 0,             // 0x50-0x53 (Left, Down, Up, NumLk)
+  '/',  '*',  '-',  '+',                                    // 0x54-0x57 (KP/, KP*, KP-, KP+)
   '\n', '1',  '2',  '3',  '4',  '5',  '6',  '7',  // 0x58-0x5F (KPEnter, KP1-7)
   '8',  '9',  '0',  '.',  0,    0,    0,    0,    // 0x60-0x67
   0,    0,    0,    0,    0,    0,    0,    0,    // 0x68-0x6F
@@ -217,6 +253,7 @@ static const uint8_t hid_keycode_to_ascii_unshift[128] = {
 };
 
 // US keyboard layout: HID keycode -> ASCII (shifted)
+// Special keys produce the same codes regardless of shift
 static const uint8_t hid_keycode_to_ascii_shift[128] = {
   0,    0,    0,    0,    'A',  'B',  'C',  'D',  // 0x00-0x07
   'E',  'F',  'G',  'H',  'I',  'J',  'K',  'L',  // 0x08-0x0F
@@ -225,10 +262,15 @@ static const uint8_t hid_keycode_to_ascii_shift[128] = {
   '#',  '$',  '%',  '^',  '&',  '*',  '(',  ')',  // 0x20-0x27
   '\n', 0x1B, '\b', '\t', ' ',  '_',  '+',  '{',  // 0x28-0x2F
   '}',  '|',  0,    ':',  '"',  '~',  '<',  '>',  // 0x30-0x37
-  '?',  0,    0,    0,    0,    0,    0,    0,    // 0x38-0x3F
-  0,    0,    0,    0,    0,    0,    0,    0,    // 0x40-0x47
-  0,    0,    0,    0,    0x7F, 0,    0,    0x83, // 0x48-0x4F
-  0x82, 0x81, 0x80, 0,    '/',  '*',  '-',  '+',  // 0x50-0x57
+  '?',  0,                                          // 0x38-0x39 (?, CapsLock)
+  KEY_CODE_F1,  KEY_CODE_F2,  KEY_CODE_F3,  KEY_CODE_F4,   // 0x3A-0x3D
+  KEY_CODE_F5,  KEY_CODE_F6,                                // 0x3E-0x3F
+  KEY_CODE_F7,  KEY_CODE_F8,  KEY_CODE_F9,  KEY_CODE_F10,  // 0x40-0x43
+  KEY_CODE_F11, KEY_CODE_F12, 0,    0,                      // 0x44-0x47
+  0,    KEY_CODE_INSERT, KEY_CODE_HOME, KEY_CODE_PGUP,      // 0x48-0x4B
+  0x7F, KEY_CODE_END, KEY_CODE_PGDN, KEY_CODE_RIGHT,       // 0x4C-0x4F
+  KEY_CODE_LEFT, KEY_CODE_DOWN, KEY_CODE_UP, 0,             // 0x50-0x53
+  '/',  '*',  '-',  '+',                                    // 0x54-0x57
   '\n', '1',  '2',  '3',  '4',  '5',  '6',  '7',  // 0x58-0x5F
   '8',  '9',  '0',  '.',  0,    0,    0,    0,    // 0x60-0x67
   0,    0,    0,    0,    0,    0,    0,    0,    // 0x68-0x6F
@@ -286,7 +328,7 @@ static void process_keycode(uint8_t keycode, uint8_t modifier) {
 
   uint8_t ch = hid_to_ascii(keycode, modifier);
   if (ch) {
-    kbd_ring_put(ch);
+    kbd_ring_put(((uint16_t)modifier << 8) | ch);
   }
 }
 

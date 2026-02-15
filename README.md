@@ -6,7 +6,7 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 ## What's New
 
-This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
+This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, keyboard input for Lisp programs (with modifier key support), a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
@@ -21,7 +21,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 ### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
 
 - PIO USB host on core1 (PIO 2 / DMA channel 3 to avoid HSTX conflicts)
-- HID keyboard → 256-byte ring buffer → `gserial()` on core0
+- HID keyboard → 256-entry 16-bit ring buffer → `gserial()` on core0 (REPL) or `(keyboard)` / `(wait-keyboard)` (Lisp programs)
 - US keyboard layout with shift, ctrl, caps lock
 - Key repeat (500ms delay, 50ms rate)
 - Automatic recovery from PIO USB deaf states and core1 lockups
@@ -29,6 +29,32 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - Mouse cursor: 8×8 arrow sprite with save-under buffer, auto-hidden during draw calls
 - `(mouse-x)`, `(mouse-y)`, `(mouse-buttons)`, `(mouse-click)` — read mouse state from Lisp
 - `(mouse-show)`, `(mouse-hide)` — show/hide the cursor in graphics mode
+
+### Keyboard Input for Lisp Programs
+
+- **`(keyboard)`** — non-blocking, returns next key as an integer or `nil` if buffer is empty
+- **`(wait-keyboard)`** — blocking, waits for a keypress (supports escape via button 1)
+- **`(keyboard-flush)`** — discards all pending keys (useful when entering a game loop or switching modes)
+- Return value encodes both key and modifier state in a single integer:
+  - `(key-code k)` — extracts the key code (low byte): ASCII for printable keys, `*key-...*` constants for special keys
+  - `(key-mod k)` — extracts the modifier bitmask (high byte)
+- **21 key constants** defined at boot: `*key-up*`, `*key-down*`, `*key-left*`, `*key-right*`, `*key-home*`, `*key-end*`, `*key-pgup*`, `*key-pgdn*`, `*key-insert*`, `*key-f1*` through `*key-f12*`
+- **4 modifier constants**: `*mod-ctrl*`, `*mod-shift*`, `*mod-alt*`, `*mod-super*` — each matches both left and right versions
+- Test modifiers with: `(> (logand (key-mod k) *mod-ctrl*) 0)`
+
+```lisp
+;; Simple keyboard event loop
+(graphics-mode)
+(loop
+  (let ((k (keyboard)))
+    (when k
+      (let ((kc (key-code k)))
+        (cond
+          ((= kc 27) (text-mode) (return))     ; Escape → quit
+          ((= kc *key-up*) (move-up))           ; arrow keys
+          ((and (> (logand (key-mod k) *mod-ctrl*) 0)
+                (= kc 19)) (save)))))))         ; Ctrl+S
+```
 
 ### Hardware Escape Button (fruitjam_escape.h)
 
@@ -74,7 +100,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 (audio-stop-all)                          ; silence everything
 ```
 
-**Built-in demo:** `(demo)` — an interactive paint app that showcases audio (UI click/blip sound effects, startup jingle), mouse drawing, button input (color/size cycling), and NeoPixels (reflecting current brush color).
+**Built-in demo:** `(demo)` — an interactive paint app that showcases audio (UI click/blip sound effects, startup jingle), mouse drawing, button input (color/size cycling), keyboard shortcuts (Escape to quit, c/s/x for color/size/clear), and NeoPixels (reflecting current brush color).
 
 **12 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`
 
@@ -168,13 +194,12 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 
 ## Future Work
 
+- **Screen editor** — a graphics-mode editor for writing Lisp code on the machine (now feasible with keyboard input)
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
-- **Keyboard input in graphics mode** — expose keyboard to Lisp programs for games/apps; would allow Escape key to replace button1 as abort mechanism
 - **Self-releasing notes** — `(audio-note voice note duration-ms)` for fire-and-forget sound effects
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Line editor cursor movement** — left/right arrow keys for in-line editing (currently append-only)
 - **Autorun** — boot directly into a saved program from SD card
-- **Screen editor** — a text-mode editor for writing Lisp code on the machine
 - **Screensaver** — idle timeout → visual animation, any keypress returns to REPL
 
 ## Links
