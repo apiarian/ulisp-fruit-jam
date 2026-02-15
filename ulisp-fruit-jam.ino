@@ -10007,12 +10007,16 @@ void testescape () {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   if (fruitjam_escape_check()) {
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
-    for (int i = 0; i < AUDIO_NUM_VOICES; i++) {
+    for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
       audio_voices[i].volume = 0;
       audio_voices[i].phase_inc = 0;
       audio_voices[i].env.stage = ADSR_OFF;
       audio_voices[i].release_at_ms = 0;
     }
+    // Clear any pending bell state and restore bell voice for next use
+    bell_pending = false;
+    if (bell_flash_active) term_bell_unflash();
+    bell_voice_init();
     if (neopixel_initialized) {
       neopixel_clear();
       neopixel_show();
@@ -10021,6 +10025,7 @@ void testescape () {
   }
   mouse_update_cursor();
   fruitjam_audio_fill();
+  fruitjam_bell_tick();
   #endif
   static unsigned long n;
   if (millis()-n < 500) return;

@@ -95,6 +95,16 @@ static bool term_draw_suppressed = false;
 // Scroll counter for line editor paren highlighting (incremented by term_scroll_up)
 static int line_scroll_count = 0;
 
+// ---- Terminal bell state ----
+// Visual flash: briefly draws a colored border around the screen.
+// Audio: short sine blip via self-releasing note (handled in fruitjam_audio.h).
+static volatile bool bell_pending = false;       // set by term_putchar, cleared by fruitjam_bell_tick
+static bool bell_flash_active = false;           // screen flash currently visible
+static uint32_t bell_flash_start_ms = 0;         // when flash started
+#define BELL_FLASH_DURATION_MS 80                // how long the visual flash lasts
+#define BELL_FLASH_BORDER_W 3                     // border width in pixels
+#define BELL_FLASH_COLOR PAL232(255, 255, 85)    // bright yellow
+
 // ---- Character grid (for scrolling and screen save/restore) ----
 // Each cell stores the character and its fg/bg colors
 struct TermCell {
@@ -144,6 +154,74 @@ static void term_draw_cell(int col, int row) {
   // Draw character (only printable)
   if (cell.ch >= 32 && cell.ch < 127) {
     display8.drawChar(px, py, cell.ch, cell.fg, cell.bg, 1);
+  }
+}
+
+// ---- Terminal bell — visual flash ----
+// Draws/erases a colored border around the screen edges.
+// The border overlaps the outermost few pixels of the terminal grid;
+// erasing redraws the affected terminal cells to restore them.
+
+static void term_bell_flash() {
+  if (bell_flash_active || term_draw_suppressed) return;
+  uint8_t *buf = display8.getBuffer();
+  if (!buf) return;
+  int w = BELL_FLASH_BORDER_W;
+  uint8_t c = BELL_FLASH_COLOR;
+  // Top border
+  memset(buf, c, DISPLAY_WIDTH * w);
+  // Bottom border
+  memset(buf + DISPLAY_WIDTH * (DISPLAY_HEIGHT - w), c, DISPLAY_WIDTH * w);
+  // Left and right borders (between top and bottom)
+  for (int y = w; y < DISPLAY_HEIGHT - w; y++) {
+    uint8_t *row = buf + y * DISPLAY_WIDTH;
+    memset(row, c, w);
+    memset(row + DISPLAY_WIDTH - w, c, w);
+  }
+  bell_flash_active = true;
+  bell_flash_start_ms = millis();
+}
+
+static void term_bell_unflash() {
+  if (!bell_flash_active) return;
+  bell_flash_active = false;
+  if (term_draw_suppressed) return;
+  // Redraw terminal cells that overlap with the border region.
+  int border_rows = (BELL_FLASH_BORDER_W + CHAR_H - 1) / CHAR_H; // rows affected by top/bottom
+  int border_cols = (BELL_FLASH_BORDER_W + CHAR_W - 1) / CHAR_W; // cols affected by left/right
+  // Top rows (full width)
+  for (int r = 0; r < border_rows && r < TERM_ROWS; r++)
+    for (int c = 0; c < TERM_COLS; c++)
+      term_draw_cell(c, r);
+  // Bottom rows (full width)
+  for (int r = TERM_ROWS - border_rows; r < TERM_ROWS; r++)
+    for (int c = 0; c < TERM_COLS; c++)
+      if (r >= border_rows) term_draw_cell(c, r); // avoid double-draw
+  // Left and right columns (middle rows only)
+  for (int r = border_rows; r < TERM_ROWS - border_rows; r++) {
+    for (int c = 0; c < border_cols; c++) term_draw_cell(c, r);
+    for (int c = TERM_COLS - border_cols; c < TERM_COLS; c++) term_draw_cell(c, r);
+  }
+  // Clear the gutter — the gap between the terminal grid and the display edge.
+  // The grid is TERM_COLS*CHAR_W × TERM_ROWS*CHAR_H (396×296) but the display
+  // is 400×300, leaving 4 pixels on the right and 4 on the bottom that no
+  // terminal cell covers.
+  uint8_t *buf = display8.getBuffer();
+  if (!buf) return;
+  int grid_w = TERM_COLS * CHAR_W;   // 396
+  int grid_h = TERM_ROWS * CHAR_H;   // 296
+  // Right gutter (columns grid_w..DISPLAY_WIDTH-1, all rows)
+  if (grid_w < DISPLAY_WIDTH) {
+    int gutter_w = DISPLAY_WIDTH - grid_w;
+    for (int y = 0; y < DISPLAY_HEIGHT; y++) {
+      memset(buf + y * DISPLAY_WIDTH + grid_w, term_bg_color, gutter_w);
+    }
+  }
+  // Bottom gutter (rows grid_h..DISPLAY_HEIGHT-1, columns 0..grid_w-1)
+  if (grid_h < DISPLAY_HEIGHT) {
+    for (int y = grid_h; y < DISPLAY_HEIGHT; y++) {
+      memset(buf + y * DISPLAY_WIDTH, term_bg_color, grid_w);
+    }
   }
 }
 
@@ -308,7 +386,9 @@ static void term_putchar(char c) {
       } else if (c == '\b' || c == 0x7F) {
         if (term_cx > 0) term_cx--;
       } else if (c == '\a') {
-        // Bell — ignore
+        // Terminal bell — visual flash + audio blip
+        bell_pending = true;
+        term_bell_flash();
       } else if (c == '\t') {
         term_cx = min(((term_cx + 8) & ~7), TERM_COLS - 1);
       } else if (c >= 32 || c < 0) {
@@ -615,6 +695,8 @@ static void line_redraw_from(int from) {
 static void line_insert_char(char c) {
   if (linebuf_len >= LINEBUF_SIZE - 1) {
     Serial.write('\a');  // bell on serial terminal — buffer full
+    bell_pending = true; // trigger HDMI bell (audio + visual)
+    term_bell_flash();
     return;
   }
   if (linebuf_pos == linebuf_len) {

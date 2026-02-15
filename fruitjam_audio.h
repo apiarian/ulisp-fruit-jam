@@ -88,7 +88,9 @@ static const struct pio_program audio_i2s_pio_program = {
 };
 
 // ---- Voice system ----
-#define AUDIO_NUM_VOICES  5   // 0-3 = wavetable tone, 4 = noise
+#define AUDIO_NUM_VOICES  5   // 0-4 user-accessible (0-3 = wavetable tone, 4 = noise)
+#define BELL_VOICE        5   // private voice for terminal bell (not user-accessible)
+#define AUDIO_TOTAL_VOICES 6  // total voices including bell
 #define AUDIO_WAVETABLE_SIZE 256
 
 // Built-in waveform IDs
@@ -145,7 +147,7 @@ static uint32_t *audio_ring_buf = NULL;
 static volatile size_t audio_write_idx = 0;
 static volatile size_t audio_read_idx = 0;
 static bool audio_initialized = false;
-static audio_voice_t audio_voices[AUDIO_NUM_VOICES];
+static audio_voice_t audio_voices[AUDIO_TOTAL_VOICES];
 static uint8_t audio_master_vol = 255; // master volume 0-255
 static bool audio_hp_inserted = false;    // current headphone state
 static uint8_t audio_output_mode = AUDIO_OUTPUT_AUTO; // routing mode
@@ -670,9 +672,22 @@ static inline uint8_t audio_envelope_tick(audio_envelope_t *e) {
 // Initialize all voices to silence
 static void audio_voices_init(void) {
     memset(audio_voices, 0, sizeof(audio_voices));
-    for (int i = 0; i < AUDIO_NUM_VOICES; i++) {
+    for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
         audio_voices[i].noise_lfsr = 0xACE1; // seed LFSR
     }
+}
+
+// ---- Terminal bell — audio parameters & voice init ----
+// Bell uses BELL_VOICE (voice 5), a private voice not accessible from Lisp.
+#define BELL_MIDI_NOTE   84     // C6 (~1047 Hz) — a clear, attention-getting pitch
+#define BELL_DURATION_MS 60     // short blip
+#define BELL_VOLUME      80     // moderate volume (0-255)
+
+// Set up the private bell voice.  Called from fruitjam_audio_init() and
+// the escape handler (to restore after silencing all voices).
+static void bell_voice_init() {
+    audio_set_builtin_waveform(BELL_VOICE, AUDIO_WAVE_SINE);
+    audio_voices[BELL_VOICE].volume = BELL_VOLUME;
 }
 
 // ---- Public API ----
@@ -720,6 +735,9 @@ static void fruitjam_audio_init(void) {
 
     audio_initialized = true;
 
+    // Set up the private bell voice (sine wave, fixed volume)
+    bell_voice_init();
+
     // Apply initial output routing unconditionally (don't rely on state change detection)
     audio_hp_detect_check();
     audio_apply_output_routing();
@@ -741,8 +759,8 @@ static void fruitjam_audio_fill(void) {
         audio_hp_detect_check();
     }
 
-    // Check auto-release timers for all voices
-    for (int v = 0; v < AUDIO_NUM_VOICES; v++) {
+    // Check auto-release timers for all voices (including bell voice)
+    for (int v = 0; v < AUDIO_TOTAL_VOICES; v++) {
         audio_voice_t *voice = &audio_voices[v];
         if (voice->release_at_ms != 0 && now >= voice->release_at_ms) {
             voice->release_at_ms = 0;
@@ -764,7 +782,7 @@ static void fruitjam_audio_fill(void) {
     for (size_t i = 0; i < avail; i++) {
         int32_t mix = 0;
 
-        for (int v = 0; v < AUDIO_NUM_VOICES; v++) {
+        for (int v = 0; v < AUDIO_TOTAL_VOICES; v++) {
             audio_voice_t *voice = &audio_voices[v];
             if (voice->phase_inc == 0) continue;
 
@@ -809,6 +827,33 @@ static void fruitjam_audio_fill(void) {
         // Pack stereo: left in upper 16 bits, right in lower 16 bits
         uint32_t stereo = ((uint16_t)sample16 << 16) | (uint16_t)sample16;
         audio_enqueue_sample(stereo);
+    }
+}
+
+// ---- Terminal bell — audio + visual flash management ----
+// Called from testescape() to handle bell sound and flash timer.
+// The visual flash is started immediately in term_putchar() (in fruitjam_terminal.h),
+// and this function handles:
+//   1. Triggering the audio blip when bell_pending is set
+//   2. Un-flashing the screen after BELL_FLASH_DURATION_MS
+//
+static void fruitjam_bell_tick() {
+    // Handle pending bell trigger (sound)
+    if (bell_pending) {
+        bell_pending = false;
+        if (audio_initialized) {
+            // Play a self-releasing note on the private bell voice
+            float freq = 440.0f * powf(2.0f, (BELL_MIDI_NOTE - 69) / 12.0f);
+            audio_set_freq(BELL_VOICE, freq);
+            audio_voices[BELL_VOICE].release_at_ms = millis() + BELL_DURATION_MS;
+        }
+    }
+
+    // Handle flash timer — unflash after duration expires
+    if (bell_flash_active) {
+        if (millis() - bell_flash_start_ms >= BELL_FLASH_DURATION_MS) {
+            term_bell_unflash();
+        }
     }
 }
 
