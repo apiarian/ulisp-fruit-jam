@@ -6,7 +6,7 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 ## What's New
 
-This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, a 5-voice wavetable synthesizer with ADSR envelopes, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
+This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
@@ -77,6 +77,26 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **12 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`
 
+### NeoPixel Control (fruitjam_neopixel.h)
+
+- 5 onboard NeoPixels (WS2812, GPIO 32) accessible from Lisp
+- API matches the [official uLisp NeoPixel extension](http://www.ulisp.com/show?4GMV)
+- PIO 2 hardware driver (autonomous timing, immune to CPU interrupts)
+- HSV colors, gamma correction, rainbow fills
+
+```lisp
+(pixels-set-pixel-color 0 32 0 0)   ; pixel 0 = red
+(pixels-set-pixel-color 1 0 32 0)   ; pixel 1 = green
+(pixels-show)                         ; transmit to hardware
+
+(pixels-rainbow)                      ; fill with rainbow
+(pixels-show)
+
+(rainbow)                             ; built-in animated rainbow demo
+```
+
+**8 Lisp functions:** `pixels-begin`, `pixels-clear`, `pixels-fill`, `pixels-set-pixel-color`, `pixels-color`, `pixels-color-hsv`, `pixels-show`, `pixels-rainbow`
+
 ### Button Input
 
 - `(button n)` — returns `t` if button n (1–3) is pressed, `nil` otherwise
@@ -103,7 +123,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 Core 0: uLisp interpreter + display (DVHSTX8 400×300) + audio synthesis
 Core 1: USB host keyboard + mouse (PIO USB via TinyUSB)
 
-Hardware: HSTX → HDMI, PIO 0 → I2S audio, PIO 2 → USB host
+Hardware: HSTX → HDMI, PIO 0 → I2S audio, PIO 2 → USB host + NeoPixels
 DMA: 0–2 = HSTX video, 3 = PIO USB, 4 = I2S audio
 Interrupts: BUTTON1 (GPIO0) → escape, DMA_IRQ_1 → audio
 Headphone detect: polled via I2C every 500ms (not GPIO IRQ — single callback per core)
@@ -153,7 +173,7 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Line editor** — enable uLisp's built-in tab completion, paren highlighting, and command recall on HDMI
 - **Autorun** — boot directly into a saved program from SD card
-- **NeoPixels** — expose the 5 onboard NeoPixels to Lisp
+- **Screen editor** — a text-mode editor for writing Lisp code on the machine
 - **USB Gamepad** — HID gamepad input for games
 
 ## Links

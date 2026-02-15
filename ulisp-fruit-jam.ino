@@ -145,6 +145,21 @@ const char LispLibrary[] =
       "(when (> (mouse-buttons) 0) "
         "(fill-circle (mouse-x) (mouse-y) sz col)) "
       "(delay 8))))"
+"(defun rainbow () "
+  "(pixels-begin) "
+  "(loop "
+    "(dotimes (n 256) "
+      "(pixels-rainbow (* n 256) 1 255 50 t) "
+      "(pixels-show) "
+      "(delay 20))))"
+"(defun pixel-test () "
+  "(pixels-begin) "
+  "(dolist (c '((32 0 0) (0 32 0) (0 0 32) (32 32 0) (0 32 32) (32 0 32) (32 32 32))) "
+    "(dotimes (i 5) "
+      "(pixels-set-pixel-color i (car c) (cadr c) (caddr c))) "
+    "(pixels-show) (delay 1000) "
+    "(pixels-clear) (pixels-show) (delay 500)) "
+  "(princ \"Done.\") (terpri))"
 ;
 
 
@@ -520,6 +535,7 @@ const char LispLibrary[] =
   #include "fruitjam_terminal.h"
   #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
+  #include "fruitjam_neopixel.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
   #include "fruitjam_escape.h"
@@ -8039,6 +8055,127 @@ object *fn_button (object *args, object *env) {
   #endif
 }
 
+object *fn_pixelsbegin (object *args, object *env) {
+  (void) args; (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  neopixel_init();
+  #endif
+  return nil;
+}
+
+object *fn_pixelsclear (object *args, object *env) {
+  (void) args; (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  neopixel_clear();
+  #endif
+  return nil;
+}
+
+object *fn_pixelsfill (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  uint32_t color = 0;
+  int first_pixel = 0, count = NEOPIXEL_COUNT;
+  if (args != NULL) {
+    color = checkinteger(first(args));
+    args = cdr(args);
+    if (args != NULL) {
+      first_pixel = checkinteger(first(args));
+      args = cdr(args);
+      if (args != NULL) {
+        count = checkinteger(first(args));
+      }
+    }
+  }
+  neopixel_fill(color, first_pixel, count);
+  #endif
+  return nil;
+}
+
+object *fn_pixelssetpixelcolor (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int nargs = listlength(args);
+  int i = checkinteger(first(args));
+  if (nargs == 2) {
+    neopixel_set_pixel(i, checkinteger(second(args)));
+  } else {
+    args = cdr(args);
+    int r = checkinteger(first(args));
+    int g = checkinteger(second(args));
+    int b = checkinteger(third(args));
+    neopixel_set_pixel_rgb(i, r, g, b);
+  }
+  #endif
+  return nil;
+}
+
+object *fn_pixelscolor (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int r = checkinteger(first(args));
+  int g = checkinteger(second(args));
+  int b = checkinteger(third(args));
+  int w = 0;
+  args = cddr(cdr(args));
+  if (args != NULL) w = checkinteger(first(args));
+  return number(neopixel_color(r, g, b, w));
+  #else
+  return number(0);
+  #endif
+}
+
+object *fn_pixelscolorhsv (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int hue = checkinteger(first(args));
+  int sat = checkinteger(second(args));
+  int val = checkinteger(third(args));
+  return number(neopixel_color_hsv(hue, sat, val));
+  #else
+  return number(0);
+  #endif
+}
+
+object *fn_pixelsshow (object *args, object *env) {
+  (void) args; (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  neopixel_show();
+  #endif
+  return nil;
+}
+
+object *fn_pixelsrainbow (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  uint16_t first_hue = 0;
+  int cycles = 1;
+  uint8_t sat = 255, val = 255;
+  bool gammify = true;
+  if (args != NULL) {
+    first_hue = checkinteger(first(args));
+    args = cdr(args);
+    if (args != NULL) {
+      cycles = checkinteger(first(args));
+      args = cdr(args);
+      if (args != NULL) {
+        sat = checkinteger(first(args));
+        args = cdr(args);
+        if (args != NULL) {
+          val = checkinteger(first(args));
+          args = cdr(args);
+          if (args != NULL) {
+            gammify = (first(args) != nil);
+          }
+        }
+      }
+    }
+  }
+  neopixel_rainbow(first_hue, cycles, sat, val, gammify);
+  #endif
+  return nil;
+}
+
 // Built-in symbol names
 const char string0[] = "nil";
 const char string1[] = "t";
@@ -8485,6 +8622,14 @@ const char string284[] = "audio-trigger";
 const char string285[] = "audio-release";
 const char string286[] = "audio-output";
 const char string287[] = "button";
+const char string288[] = "pixels-begin";
+const char string289[] = "pixels-clear";
+const char string290[] = "pixels-fill";
+const char string291[] = "pixels-set-pixel-color";
+const char string292[] = "pixels-color";
+const char string293[] = "pixels-color-hsv";
+const char string294[] = "pixels-show";
+const char string295[] = "pixels-rainbow";
 #endif
 #elif defined(CPU_RA4M1)
 const char string254[] = ":input";
@@ -9128,6 +9273,30 @@ const char doc287[] = "(button n)\n"
 "Note: button 1 is the escape button. Its interrupt fires on press,\n"
 "so polling it in a loop will trigger an escape before the result\n"
 "can be used. Use buttons 2 and 3 for interactive input.";
+const char doc288[] = "(pixels-begin)\n"
+"Configures the NeoPixel pin for output. Called automatically at boot.";
+const char doc289[] = "(pixels-clear)\n"
+"Sets all pixel colors to off in the buffer. Call (pixels-show) to update.";
+const char doc290[] = "(pixels-fill [color] [first] [count])\n"
+"Fills all or part of the NeoPixel strip with a packed 32-bit color (default 0).\n"
+"first, default 0, the first NeoPixel to fill.\n"
+"count, default all, the number of NeoPixels to fill.";
+const char doc291[] = "(pixels-set-pixel-color index color)\n"
+"(pixels-set-pixel-color index red green blue)\n"
+"Sets a pixel's color using either a packed 32-bit RGB value,\n"
+"or separate red, green, blue components (0-255 each).";
+const char doc292[] = "(pixels-color red green blue [white])\n"
+"Packs separate red, green, blue, and optional white values (0-255)\n"
+"into a single 32-bit color value.";
+const char doc293[] = "(pixels-color-hsv hue sat val)\n"
+"Converts hue (0-65535), saturation (0-255), and value (0-255)\n"
+"into a packed 32-bit RGB color.";
+const char doc294[] = "(pixels-show)\n"
+"Transmits the pixel data buffer to the NeoPixels.";
+const char doc295[] = "(pixels-rainbow [first-hue] [cycles] [sat] [val] [gammify])\n"
+"Fills the NeoPixel strip with one or more cycles of hues.\n"
+"first-hue (0-65535), cycles (default 1), sat (0-255, default 255),\n"
+"val (0-255, default 255), gammify (default t). Call (pixels-show) to update.";
 #endif
 
 // Built-in symbol lookup table
@@ -9577,6 +9746,14 @@ const tbl_entry_t lookup_table[] = {
   { string285, fn_audiorelease, 0211, doc285 },
   { string286, fn_audiooutput, 0211, doc286 },
   { string287, fn_button, 0211, doc287 },
+  { string288, fn_pixelsbegin, 0200, doc288 },
+  { string289, fn_pixelsclear, 0200, doc289 },
+  { string290, fn_pixelsfill, 0203, doc290 },
+  { string291, fn_pixelssetpixelcolor, 0224, doc291 },
+  { string292, fn_pixelscolor, 0234, doc292 },
+  { string293, fn_pixelscolorhsv, 0233, doc293 },
+  { string294, fn_pixelsshow, 0200, doc294 },
+  { string295, fn_pixelsrainbow, 0205, doc295 },
 #endif
 #elif defined(CPU_RA4M1)
   { string254, (fn_ptr_type)INPUT, PINMODE, NULL },
