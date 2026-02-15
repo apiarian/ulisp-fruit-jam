@@ -9743,6 +9743,73 @@ const tbl_entry_t *table (int n) {
 unsigned int tablesize (int n) {
   return tablesizes[n];
 }
+
+// ---- Autocomplete for Fruit Jam line editor ----
+// Cycles through built-in symbols matching the partial word in linebuf.
+// Called from fruitjam_line_getchar() on Tab key.
+#if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+static void line_autocomplete () {
+  int gap = 0;
+
+  if (line_autocomplete_reset) {
+    line_ac_i = 0;
+    line_ac_last_extra = 0;
+    line_autocomplete_reset = false;
+    line_ac_buf_index = linebuf_len;
+    line_ac_match_len = 0;
+
+    // Scan backward to find start of current word
+    for (int m = 0; m < 32 && m < linebuf_len; m++) {
+      int pos = linebuf_len - 1 - m;
+      char ch = linebuf[pos];
+      if (ch == ' ' || ch == '(' || ch == '\n') {
+        if (m > 0) {
+          line_ac_buf_index = pos + 1;
+          line_ac_match_len = m;
+        }
+        break;
+      }
+      if (pos == 0) {
+        line_ac_buf_index = 0;
+        line_ac_match_len = m + 1;
+        break;
+      }
+    }
+  }
+
+  if (line_ac_match_len <= 0) return;
+
+  // Erase the extra chars from the previous completion
+  for (int n = 0; n < line_ac_last_extra; n++) {
+    if (linebuf_len > 0) linebuf_len--;
+    fruitjam_pserial('\b'); fruitjam_pserial(' '); fruitjam_pserial('\b');
+  }
+  line_ac_last_extra = 0;
+
+  // Scan symbol table for next match
+  int entries = tablesize(0) + tablesize(1);
+  while (true) {
+    bool n = line_ac_i < (unsigned int)tablesize(0);
+    const char *k = table(n ? 0 : 1)[n ? line_ac_i : line_ac_i - tablesize(0)].string;
+    line_ac_i = (line_ac_i + 1) % entries;
+
+    if (strncmp(k, &linebuf[line_ac_buf_index], line_ac_match_len) == 0) {
+      // Found a match — append the remaining characters
+      int klen = strlen(k);
+      int before = linebuf_len;
+      for (int j = line_ac_match_len; j < klen; j++) {
+        line_append_char(k[j]);
+      }
+      line_ac_last_extra = linebuf_len - before;
+      return;
+    }
+
+    gap++;
+    if (gap >= entries) return;  // No match found
+  }
+}
+#endif
+
 #endif
 
 // Table lookup functions
@@ -10551,6 +10618,13 @@ void gserial_flush () {
   KybdAvailable = 0;
   WritePtr = 0;
   #endif
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  linebuf_len = 0;
+  linebuf_read = 0;
+  linebuf_ready = false;
+  line_autocomplete_reset = true;
+  line_paren_idx = -1;
+  #endif
 }
 
 int gserial () {
@@ -10873,6 +10947,9 @@ void repl (object *env) {
       pint(BreakLevel, pserial);
     }
     pserial('>'); pserial(' ');
+    #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+    line_mark_input_start();
+    #endif
     Context = NIL;
     object *line = readmain(gserial);
     #if defined(CPU_NRF52840)

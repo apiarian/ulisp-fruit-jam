@@ -92,6 +92,9 @@ static uint8_t term_bg_color = TERM_PAL_BLACK;
 // Set by fruitjam_graphics.h when entering/exiting graphics mode.
 static bool term_draw_suppressed = false;
 
+// Scroll counter for line editor paren highlighting (incremented by term_scroll_up)
+static int line_scroll_count = 0;
+
 // ---- Character grid (for scrolling and screen save/restore) ----
 // Each cell stores the character and its fg/bg colors
 struct TermCell {
@@ -185,6 +188,8 @@ static void term_blink_cursor() {
 // ---- Scrolling ----
 
 static void term_scroll_up() {
+  // Track scrolls for parenthesis highlighting position correction
+  line_scroll_count++;
   // Shift grid rows up by 1
   memmove(&term_grid[0], &term_grid[1], sizeof(TermCell) * TERM_COLS * (TERM_ROWS - 1));
   // Clear the bottom row
@@ -425,6 +430,14 @@ static void fruitjam_pserial(char c) {
 }
 
 // ---- Line buffer for gserial() ----
+// Features: editing, Tab autocomplete, parenthesis matching, Up arrow recall.
+// Adapted from PicoCalc/Cardputer uLisp machines.
+
+// Special key codes from USB keyboard (>= 0x80, set in fruitjam_usbhost.h)
+#define KEY_UP    0x80
+#define KEY_DOWN  0x81
+#define KEY_LEFT  0x82
+#define KEY_RIGHT 0x83
 
 #define LINEBUF_SIZE 256
 static char  linebuf[LINEBUF_SIZE];
@@ -432,52 +445,267 @@ static int   linebuf_len = 0;
 static int   linebuf_read = 0;
 static bool  linebuf_ready = false;
 
+// Previous command recall (Up arrow)
+// linebuf_prev holds the last *complete* REPL command (may span multiple input lines).
+// linebuf_accum accumulates lines as they're submitted; finalized on next REPL prompt.
+static char  linebuf_prev[LINEBUF_SIZE];
+static int   linebuf_prev_len = 0;
+static char  linebuf_accum[LINEBUF_SIZE];
+static int   linebuf_accum_len = 0;
+
+// ---- Autocomplete state ----
+static bool line_autocomplete_reset = true;
+static int  line_ac_buf_index = 0;
+static int  line_ac_match_len = 0;
+static int  line_ac_last_extra = 0;    // chars added by last completion
+static unsigned int line_ac_i = 0;     // scan position in symbol table
+
+// Helper: erase n characters backward on screen (no linebuf change)
+static void line_erase_back(int n) {
+  for (int i = 0; i < n; i++) {
+    fruitjam_pserial('\b');
+    fruitjam_pserial(' ');
+    fruitjam_pserial('\b');
+  }
+}
+
+// Helper: append a char to linebuf and echo it
+static void line_append_char(char c) {
+  if (linebuf_len < LINEBUF_SIZE - 1) {
+    linebuf[linebuf_len++] = c;
+    fruitjam_pserial(c);
+  } else {
+    Serial.write('\a');  // bell on serial terminal — buffer full
+  }
+}
+
+// Autocomplete: implemented in .ino (needs access to symbol table).
+// Declared here, defined after lookup_table in the .ino.
+static void line_autocomplete();
+
+// ---- Parenthesis highlighting ----
+// Uses the terminal's character grid and absolute cursor positioning to
+// highlight the matching '(' in green when ')' is typed.
+// Works correctly even when input wraps across multiple terminal lines.
+
+// Saved cursor position from when line editing started (after the prompt)
+static int  line_start_cx = 0;
+static int  line_start_cy = 0;
+// line_scroll_count declared above (near term_draw_suppressed) for use in term_scroll_up()
+
+// Update cursor start position (called after each line drains, for continuation lines)
+static void line_update_input_pos() {
+  #ifndef FRUITJAM_NO_DISPLAY
+  line_start_cx = term_cx;
+  line_start_cy = term_cy;
+  line_scroll_count = 0;
+  #endif
+}
+
+// Called from the REPL at prompt time: finalizes the accumulated command as the
+// "previous command" for Up arrow recall, and records cursor position.
+static void line_mark_input_start() {
+  line_update_input_pos();
+  // Finalize accumulated lines as the previous command
+  if (linebuf_accum_len > 0) {
+    memcpy(linebuf_prev, linebuf_accum, linebuf_accum_len);
+    linebuf_prev_len = linebuf_accum_len;
+    linebuf_accum_len = 0;
+  }
+}
+
+// Compute absolute terminal position for a character at offset `idx` in linebuf.
+// Returns false if the position has scrolled off screen.
+static bool line_pos_for_index(int idx, int *col, int *row) {
+  // Characters from the start of input wrap at TERM_COLS
+  int abs_offset = line_start_cx + idx;
+  *row = line_start_cy - line_scroll_count + abs_offset / TERM_COLS;
+  *col = abs_offset % TERM_COLS;
+  if (*row < 0 || *row >= TERM_ROWS) return false;
+  return true;
+}
+
+// Move cursor to absolute position using CSI H (1-based)
+static void line_vt100_goto(int col, int row) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "\033[%d;%dH", row + 1, col + 1);
+  for (char *p = buf; *p; p++) fruitjam_pserial(*p);
+}
+
+// Highlight or unhighlight the '(' at buffer index `idx`
+static void line_highlight_at(int idx, bool highlight) {
+  int col, row;
+  if (!line_pos_for_index(idx, &col, &row)) return;  // scrolled off screen
+  // Save cursor
+  fruitjam_pserial('\033'); fruitjam_pserial('7');
+  // Move to target
+  line_vt100_goto(col, row);
+  if (highlight) {
+    const char *seq = "\033[32;1m(\033[0m";
+    for (const char *p = seq; *p; p++) fruitjam_pserial(*p);
+  } else {
+    fruitjam_pserial('(');
+  }
+  // Restore cursor
+  fruitjam_pserial('\033'); fruitjam_pserial('8');
+}
+
+// Index of the currently highlighted '(' in linebuf, or -1
+static int line_paren_idx = -1;
+
+// Find and highlight matching parenthesis after ')' is typed.
+// Searches the current linebuf only. Matches in previous lines (linebuf_accum)
+// are not highlighted because the cursor origin differs across input lines.
+static void line_check_paren_match() {
+  // Undo previous highlight
+  if (line_paren_idx >= 0) {
+    line_highlight_at(line_paren_idx, false);
+    line_paren_idx = -1;
+  }
+
+  // Check if last char is ')'
+  if (linebuf_len == 0 || linebuf[linebuf_len - 1] != ')') return;
+
+  // Scan backward for matching '(' — first in current linebuf
+  int level = 0;
+  bool in_string = false;
+  for (int i = linebuf_len - 1; i >= 0; i--) {
+    char ch = linebuf[i];
+    if (ch == '"') in_string = !in_string;
+    if (!in_string) {
+      if (ch == ')') level++;
+      else if (ch == '(') {
+        level--;
+        if (level == 0) {
+          line_paren_idx = i;
+          line_highlight_at(i, true);
+          return;
+        }
+      }
+    }
+  }
+
+  // Not found in current line — continue scanning into linebuf_accum (previous lines).
+  // We can't highlight across lines (different cursor origin), so just skip highlighting.
+  // But we don't need to — the visual feedback that the match was NOT found (no highlight)
+  // already tells the user their parens span previous lines, which is useful info too.
+}
+
 static int fruitjam_line_getchar(int raw_c) {
+  // Drain completed line first
   if (linebuf_ready) {
     if (linebuf_read < linebuf_len) return linebuf[linebuf_read++];
     linebuf_ready = false;
     linebuf_len = 0;
     linebuf_read = 0;
+    // Update cursor position for continuation lines (don't finalize command yet)
+    line_update_input_pos();
     return '\n';
   }
 
   if (raw_c < 0) return -1;
-  char c = (char)raw_c;
+  uint8_t uc = (uint8_t)raw_c;
 
-  if (c == '\n' || c == '\r') {
+  // ---- Undo previous paren highlight before any editing ----
+  if (line_paren_idx >= 0) {
+    line_highlight_at(line_paren_idx, false);
+    line_paren_idx = -1;
+  }
+
+  // ---- Enter: submit line ----
+  if (uc == '\n' || uc == '\r') {
     fruitjam_pserial('\n');
+    // Accumulate this line into the command buffer (joined with spaces)
+    if (linebuf_len > 0) {
+      if (linebuf_accum_len > 0 && linebuf_accum_len < LINEBUF_SIZE - 1) {
+        linebuf_accum[linebuf_accum_len++] = ' ';  // space separator between lines
+      }
+      int copy_len = linebuf_len;
+      if (linebuf_accum_len + copy_len > LINEBUF_SIZE - 1) {
+        copy_len = LINEBUF_SIZE - 1 - linebuf_accum_len;
+      }
+      if (copy_len > 0) {
+        memcpy(linebuf_accum + linebuf_accum_len, linebuf, copy_len);
+        linebuf_accum_len += copy_len;
+      }
+    }
     linebuf_ready = true;
     linebuf_read = 0;
+    line_autocomplete_reset = true;
     if (linebuf_len == 0) { linebuf_ready = false; return '\n'; }
     return linebuf[linebuf_read++];
   }
 
-  if (c == '\b' || c == 0x7F) {
+  // ---- Backspace / Delete ----
+  if (uc == '\b' || uc == 0x7F) {
     if (linebuf_len > 0) {
-      linebuf_len--;
-      fruitjam_pserial('\b');
-      fruitjam_pserial(' ');
-      fruitjam_pserial('\b');
-    }
-    return -1;
-  }
-
-  if (c == 0x03) { linebuf_len = 0; fruitjam_pserial('\n'); return '\n'; }
-
-  if (c == 0x15) {
-    while (linebuf_len > 0) {
       linebuf_len--;
       fruitjam_pserial('\b'); fruitjam_pserial(' '); fruitjam_pserial('\b');
     }
+    line_autocomplete_reset = true;
     return -1;
   }
 
-  if (c < 32 && c != '\t') return -1;
-
-  if (linebuf_len < LINEBUF_SIZE - 1) {
-    linebuf[linebuf_len++] = c;
-    fruitjam_pserial(c);
+  // ---- Ctrl-C: cancel line ----
+  if (uc == 0x03) {
+    linebuf_len = 0;
+    fruitjam_pserial('\n');
+    line_autocomplete_reset = true;
+    return '\n';
   }
+
+  // ---- Ctrl-U: erase line ----
+  if (uc == 0x15) {
+    line_erase_back(linebuf_len);
+    linebuf_len = 0;
+    line_autocomplete_reset = true;
+    return -1;
+  }
+
+  // ---- Tab: autocomplete ----
+  if (uc == '\t') {
+    if (linebuf_len > 0) {
+      line_autocomplete();
+    }
+    return -1;
+  }
+
+  // ---- Up arrow: recall previous command (when buffer empty) ----
+  if (uc == KEY_UP) {
+    if (linebuf_len == 0 && linebuf_prev_len > 0) {
+      for (int i = 0; i < linebuf_prev_len; i++) {
+        line_append_char(linebuf_prev[i]);
+      }
+    }
+    line_autocomplete_reset = true;
+    return -1;
+  }
+
+  // ---- Down arrow: clear line (opposite of Up recall) ----
+  if (uc == KEY_DOWN) {
+    if (linebuf_len > 0) {
+      line_erase_back(linebuf_len);
+      linebuf_len = 0;
+      line_autocomplete_reset = true;
+    }
+    return -1;
+  }
+
+  // ---- Ignore other special keys (arrows, etc.) for now ----
+  if (uc >= 0x80) return -1;
+
+  // ---- Ignore other control chars ----
+  if (uc < 32) return -1;
+
+  // ---- Normal printable character ----
+  line_autocomplete_reset = true;
+  line_append_char((char)uc);
+
+  // Check for parenthesis match after typing ')'
+  if (uc == ')') {
+    line_check_paren_match();
+  }
+
   return -1;
 }
 
