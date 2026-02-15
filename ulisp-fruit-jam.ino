@@ -10624,6 +10624,7 @@ void gserial_flush () {
   linebuf_ready = false;
   line_autocomplete_reset = true;
   line_paren_idx = -1;
+  hist_browse = -1;
   #endif
 }
 

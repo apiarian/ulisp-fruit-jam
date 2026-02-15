@@ -445,11 +445,14 @@ static int   linebuf_len = 0;
 static int   linebuf_read = 0;
 static bool  linebuf_ready = false;
 
-// Previous command recall (Up arrow)
-// linebuf_prev holds the last *complete* REPL command (may span multiple input lines).
+// Command history ring buffer (Up/Down arrow recall)
 // linebuf_accum accumulates lines as they're submitted; finalized on next REPL prompt.
-static char  linebuf_prev[LINEBUF_SIZE];
-static int   linebuf_prev_len = 0;
+#define HISTORY_SIZE 8
+static char  linebuf_hist[HISTORY_SIZE][LINEBUF_SIZE];
+static int   linebuf_hist_len[HISTORY_SIZE];
+static int   hist_head = 0;      // next slot to write (newest + 1)
+static int   hist_count = 0;     // number of entries stored (0..HISTORY_SIZE)
+static int   hist_browse = -1;   // browsing position (-1 = not browsing)
 static char  linebuf_accum[LINEBUF_SIZE];
 static int   linebuf_accum_len = 0;
 
@@ -508,10 +511,13 @@ static void line_mark_input_start() {
   line_update_input_pos();
   // Finalize accumulated lines as the previous command
   if (linebuf_accum_len > 0) {
-    memcpy(linebuf_prev, linebuf_accum, linebuf_accum_len);
-    linebuf_prev_len = linebuf_accum_len;
+    memcpy(linebuf_hist[hist_head], linebuf_accum, linebuf_accum_len);
+    linebuf_hist_len[hist_head] = linebuf_accum_len;
+    hist_head = (hist_head + 1) % HISTORY_SIZE;
+    if (hist_count < HISTORY_SIZE) hist_count++;
     linebuf_accum_len = 0;
   }
+  hist_browse = -1;
 }
 
 // Compute absolute terminal position for a character at offset `idx` in linebuf.
@@ -612,6 +618,9 @@ static int fruitjam_line_getchar(int raw_c) {
     line_paren_idx = -1;
   }
 
+  // Reset history browsing on any non-arrow key
+  if (uc != KEY_UP && uc != KEY_DOWN) hist_browse = -1;
+
   // ---- Enter: submit line ----
   if (uc == '\n' || uc == '\r') {
     fruitjam_pserial('\n');
@@ -670,24 +679,40 @@ static int fruitjam_line_getchar(int raw_c) {
     return -1;
   }
 
-  // ---- Up arrow: recall previous command (when buffer empty) ----
+  // ---- Up arrow: browse history backward ----
   if (uc == KEY_UP) {
-    if (linebuf_len == 0 && linebuf_prev_len > 0) {
-      for (int i = 0; i < linebuf_prev_len; i++) {
-        line_append_char(linebuf_prev[i]);
+    if (hist_count > 0) {
+      int next = (hist_browse < 0) ? 1 : hist_browse + 1;
+      if (next <= hist_count) {
+        line_erase_back(linebuf_len);
+        linebuf_len = 0;
+        hist_browse = next;
+        int idx = (hist_head - hist_browse + HISTORY_SIZE) % HISTORY_SIZE;
+        for (int i = 0; i < linebuf_hist_len[idx]; i++) {
+          line_append_char(linebuf_hist[idx][i]);
+        }
       }
     }
     line_autocomplete_reset = true;
     return -1;
   }
 
-  // ---- Down arrow: clear line (opposite of Up recall) ----
+  // ---- Down arrow: browse history forward (or clear line) ----
   if (uc == KEY_DOWN) {
-    if (linebuf_len > 0) {
+    if (hist_browse > 1) {
       line_erase_back(linebuf_len);
       linebuf_len = 0;
-      line_autocomplete_reset = true;
+      hist_browse--;
+      int idx = (hist_head - hist_browse + HISTORY_SIZE) % HISTORY_SIZE;
+      for (int i = 0; i < linebuf_hist_len[idx]; i++) {
+        line_append_char(linebuf_hist[idx][i]);
+      }
+    } else if (hist_browse >= 0) {
+      line_erase_back(linebuf_len);
+      linebuf_len = 0;
+      hist_browse = -1;
     }
+    line_autocomplete_reset = true;
     return -1;
   }
 

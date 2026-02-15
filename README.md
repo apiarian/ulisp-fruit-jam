@@ -12,7 +12,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 - Single `DVHSTX8` display at **400×300 @ 8bpp** (800×600 HDMI, pixel-doubled)
 - **Text mode:** 66×37 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
-- **Line editor:** Tab autocomplete of built-in symbols, parenthesis matching (highlights matching `(` in green when `)` is typed), Up arrow command recall. Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
+- **Line editor:** Tab autocomplete of built-in symbols, parenthesis matching (highlights matching `(` in green when `)` is typed), 8-entry command history (Up/Down arrows). Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
 - **Graphics mode:** Full 400×300 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
 - `(graphics-mode)` / `(text-mode)` switch instantly — no hardware reconfiguration, just clear and redraw
 - `(demo)` built-in interactive demo (paint + sound + buttons + LEDs)
