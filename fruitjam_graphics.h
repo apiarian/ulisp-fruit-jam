@@ -21,7 +21,11 @@ static volatile uint8_t  mouse_buttons = 0;
 static volatile bool     mouse_clicked = false;
 
 // ---- Mouse cursor ----
-// 8x8 arrow sprite, black outline (0x00) + white fill (0xFF), transparent (0xFE = skip)
+// 8x8 arrow sprite, black outline (0x00) + white fill (0xFF), transparent (0xFE = skip).
+// 0xFE is safe as the transparent marker even though it's a valid palette index: the
+// save-under logic saves ALL framebuffer pixels unconditionally, and only overwrites/
+// restores at non-0xFE sprite positions. Framebuffer pixels under transparent sprite
+// pixels are never touched, regardless of their value.
 static const uint8_t mouse_cursor_sprite[64] = {
   0x00, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE,
   0x00, 0x00, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE,
