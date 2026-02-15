@@ -68,15 +68,13 @@ const char LispLibrary[] =
       "(fill-circle 380 290 sz col)) "
     "(draw-rect 359 280 40 20 64))) "
 
-// --- Helper: play a click sound ---
-// Envelope: fast attack, medium decay to silence, no sustain.
-// audio-note triggers the envelope automatically.
+// --- Helper: play a click sound (short square wave) ---
 "(defun demo-click (note) "
-  "(audio-note 0 note)) "
+  "(audio-note 0 note 150)) "
 
-// --- Helper: play a paint sound (short blip) ---
+// --- Helper: play a paint sound (short sine blip) ---
 "(defun demo-blip () "
-  "(audio-note 1 84)) "
+  "(audio-note 1 84 100)) "
 
 // --- Main demo: interactive paint with sound, buttons, LEDs ---
 "(defun demo () "
@@ -116,9 +114,7 @@ const char LispLibrary[] =
     "(keyboard-flush) "
     // setup audio voices for UI sounds
     "(audio-wave 0 2) (audio-vol 0 100) "
-    "(audio-envelope 0 5 150 0 300) "
     "(audio-wave 1 1) (audio-vol 1 60) "
-    "(audio-envelope 1 5 100 0 200) "
     // play startup jingle
     "(audio-wave 2 1) (audio-vol 2 100) "
     "(audio-envelope 2 10 150 80 300) "
@@ -7887,9 +7883,11 @@ object *fn_audiofreq (object *args, object *env) {
 }
 
 /*
-  (audio-note voice midi-note)
+  (audio-note voice midi-note [duration])
   Plays a MIDI note number on a voice (0-4). Middle C = 60, A4 = 69.
   Triggers the envelope if one is set.
+  Optional duration in ms: time from note start until auto-release.
+  With an envelope, starts the release phase; without, stops the oscillator.
 */
 object *fn_audionote (object *args, object *env) {
   (void) env;
@@ -7902,6 +7900,18 @@ object *fn_audionote (object *args, object *env) {
   audio_set_freq(voice, freq);
   // Auto-trigger envelope if configured
   audio_trigger(voice);
+  // Optional duration → schedule auto-release
+  args = cddr(args);
+  if (args != NULL) {
+    int duration = checkinteger(first(args));
+    if (duration > 0) {
+      audio_voices[voice].release_at_ms = millis() + duration;
+    } else {
+      audio_voices[voice].release_at_ms = 0;
+    }
+  } else {
+    audio_voices[voice].release_at_ms = 0;
+  }
   #endif
   return nil;
 }
@@ -7952,6 +7962,7 @@ object *fn_audiostop (object *args, object *env) {
   audio_voices[voice].phase_inc = 0;
   audio_voices[voice].env.stage = ADSR_OFF;
   audio_voices[voice].env.env_level = 0;
+  audio_voices[voice].release_at_ms = 0;
   #endif
   return nil;
 }
@@ -7969,6 +7980,7 @@ object *fn_audiostopall (object *args, object *env) {
     audio_voices[i].phase_inc = 0;
     audio_voices[i].env.stage = ADSR_OFF;
     audio_voices[i].env.env_level = 0;
+    audio_voices[i].release_at_ms = 0;
   }
   #endif
   return nil;
@@ -8046,6 +8058,7 @@ object *fn_audiorelease (object *args, object *env) {
   int voice = checkinteger(first(args));
   if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
   audio_release(voice);
+  audio_voices[voice].release_at_ms = 0;
   #endif
   return nil;
 }
@@ -9310,8 +9323,9 @@ const char doc275[] = "(audio-wave voice waveform)\n"
 "3=triangle, 4=sawtooth, 5=noise, or a 256-element array of values -128 to 127.";
 const char doc276[] = "(audio-freq voice frequency)\n"
 "Sets the frequency in Hz for voice (0-4). Accepts integer or float.";
-const char doc277[] = "(audio-note voice midi-note)\n"
-"Plays a MIDI note on voice (0-4). Middle C = 60, A4 = 69.";
+const char doc277[] = "(audio-note voice midi-note [duration])\n"
+"Plays a MIDI note on voice (0-4). Middle C = 60, A4 = 69.\n"
+"Optional duration: ms from note start until auto-release.";
 const char doc278[] = "(audio-vol voice level)\n"
 "Sets volume for voice (0-4). level is 0-255.";
 const char doc279[] = "(audio-master-vol level)\n"
@@ -9811,7 +9825,7 @@ const tbl_entry_t lookup_table[] = {
   { string274, fn_mousehide, 0200, doc274 },
   { string275, fn_audiowave, 0222, doc275 },
   { string276, fn_audiofreq, 0222, doc276 },
-  { string277, fn_audionote, 0222, doc277 },
+  { string277, fn_audionote, 0223, doc277 },
   { string278, fn_audiovol, 0222, doc278 },
   { string279, fn_audiomastervol, 0211, doc279 },
   { string280, fn_audiostop, 0211, doc280 },
@@ -9997,6 +10011,7 @@ void testescape () {
       audio_voices[i].volume = 0;
       audio_voices[i].phase_inc = 0;
       audio_voices[i].env.stage = ADSR_OFF;
+      audio_voices[i].release_at_ms = 0;
     }
     if (neopixel_initialized) {
       neopixel_clear();

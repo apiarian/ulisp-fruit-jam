@@ -75,6 +75,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - **Custom wavetables:** pass a 256-element uLisp array to `audio-wave` for arbitrary waveform shapes
 - **ADSR envelopes** per voice: attack/decay/release in milliseconds, sustain level 0–255
 - `audio-note` auto-triggers envelope, `audio-release` fades to silence
+- **Self-releasing notes:** `(audio-note voice note duration)` — optional duration in ms schedules auto-release from note start, enabling fire-and-forget sound effects without blocking
 - **Headphone detection:** auto-switches between speaker and 3.5mm headphone jack
 - `(audio-output mode)` for manual routing: auto (default), speaker, headphone, or both
 - Hardware: TLV320DAC3100 I2S DAC, PIO 0 for I2S output, DMA channel 4, 22050 Hz sample rate
@@ -84,6 +85,10 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 (audio-wave 0 1) (audio-wave 1 1) (audio-wave 2 1)
 (audio-vol 0 120) (audio-vol 1 120) (audio-vol 2 120)
 (audio-note 0 60) (audio-note 1 64) (audio-note 2 67)
+
+;; Fire-and-forget sound effect (150ms square blip, no envelope needed)
+(audio-wave 0 2) (audio-vol 0 150)
+(audio-note 0 72 150)
 
 ;; Plucky arpeggio with envelope
 (audio-wave 0 2)                         ; square wave
@@ -200,7 +205,7 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 
 - **Screen editor** — a graphics-mode editor for writing Lisp code on the machine (now feasible with keyboard input)
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
-- **Self-releasing notes** — `(audio-note voice note duration-ms)` for fire-and-forget sound effects
+- **Terminal bell** — audible + visual feedback for BEL character (0x07)
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Autorun** — boot directly into a saved program from SD card
 - **Screensaver** — idle timeout → visual animation, any keypress returns to REPL

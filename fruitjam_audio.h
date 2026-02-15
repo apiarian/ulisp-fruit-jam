@@ -128,6 +128,7 @@ typedef struct {
     uint8_t waveform_id;      // which built-in waveform, or CUSTOM
     uint16_t noise_lfsr;      // LFSR state (voice 4 only)
     audio_envelope_t env;     // ADSR envelope
+    uint32_t release_at_ms;   // auto-release timestamp (0 = disabled)
 } audio_voice_t;
 
 // Output routing modes
@@ -738,6 +739,22 @@ static void fruitjam_audio_fill(void) {
     if (now - audio_hp_last_check_ms >= 500) {
         audio_hp_last_check_ms = now;
         audio_hp_detect_check();
+    }
+
+    // Check auto-release timers for all voices
+    for (int v = 0; v < AUDIO_NUM_VOICES; v++) {
+        audio_voice_t *voice = &audio_voices[v];
+        if (voice->release_at_ms != 0 && now >= voice->release_at_ms) {
+            voice->release_at_ms = 0;
+            if (voice->env.enabled) {
+                // Envelope active: start release phase (fades to silence)
+                audio_release(v);
+            } else {
+                // No envelope: stop oscillator but preserve volume setting
+                // so the next audio-note on this voice plays at the same level
+                voice->phase_inc = 0;
+            }
+        }
     }
 
     // How many samples can we write? Fill as much as possible to stay
