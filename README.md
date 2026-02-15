@@ -177,6 +177,9 @@ Open `ulisp-fruit-jam.ino` in the Arduino IDE with the [Adafruit RP2350 board pa
 | **USB Stack** | Adafruit TinyUSB |
 | **Flash Size** | 16MB (no FS) |
 | **CPU Speed** | 150 MHz (overridden to 240 MHz by DVHSTX at runtime) |
+| **Optimize** | Optimize More (-O2) |
+
+⚠️ **Optimize should be "Optimize More (-O2)"** — not the default "Small (-Os)" or "Optimize (-O)". The binary is ~330KB of 16MB flash (~2%), so size is irrelevant. `-O2` meaningfully speeds up the Lisp interpreter's eval loop, graphics rendering, and audio synthesis. Avoid `-O3` and `-Ofast` (aggressive inlining can bloat code, and `-Ofast` enables non-IEEE math).
 
 ⚠️ **USB Stack must be "Adafruit TinyUSB"** — not "Adafruit TinyUSB Host (native)". The "Host (native)" option disables USB device mode, which kills serial output and the serial REPL. The correct setting enables dual-mode: native USB = device (serial), PIO USB = host (keyboard).
 
