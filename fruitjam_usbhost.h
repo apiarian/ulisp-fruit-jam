@@ -409,6 +409,10 @@ void fruitjam_usbhost_setup1() {
 
   tuh_configure(1, TUH_CFGID_RPI_PIO_USB_CONFIGURATION, &pio_cfg);
 
+  // Must use 2-arg tusb_init(rhport, &init). The 1-arg tusb_init(rhport)
+  // macro expands via _tusb_init_arg1 → _tusb_init_arg0(), which calls
+  // tusb_rhport_init(0, NULL), silently ignoring the rhport argument.
+  // (Note: tuh_init(rhport) is a separate inline function that works correctly.)
   tusb_rhport_init_t host_init = { .role = TUSB_ROLE_HOST, .speed = TUSB_SPEED_AUTO };
   tusb_init(1, &host_init);
 
