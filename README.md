@@ -14,7 +14,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - **Text mode:** 66×37 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
 - **Graphics mode:** Full 400×300 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
 - `(graphics-mode)` / `(text-mode)` switch instantly — no hardware reconfiguration, just clear and redraw
-- `(gfx-test)` built-in demo function
+- `(demo)` built-in interactive demo (paint + sound + buttons + LEDs)
 - Terminal text persists through graphics mode — returns exactly where you left off
 
 ### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
@@ -28,7 +28,6 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - Mouse cursor: 8×8 arrow sprite with save-under buffer, auto-hidden during draw calls
 - `(mouse-x)`, `(mouse-y)`, `(mouse-buttons)`, `(mouse-click)` — read mouse state from Lisp
 - `(mouse-show)`, `(mouse-hide)` — show/hide the cursor in graphics mode
-- `(paint)` — built-in mouse-driven drawing demo
 
 ### Hardware Escape Button (fruitjam_escape.h)
 
@@ -38,6 +37,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - Works even if USB host or the Lisp program is hung
 - If in graphics mode, automatically switches back to text mode
 - Silences all audio voices immediately (no notes left playing after abort)
+- Clears NeoPixels (turns them off)
 - Checked in `testescape()` and the `gserial()` input wait loop for immediate response
 
 ### Audio — 5-Voice Wavetable Synthesizer (fruitjam_audio.h)
@@ -73,7 +73,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 (audio-stop-all)                          ; silence everything
 ```
 
-**Built-in demos:** `(audio-test)`, `(noise-test)`, `(waveform-demo)`, `(poly-demo)`, `(envelope-demo)` — all accept an optional volume parameter (0–255).
+**Built-in demo:** `(demo)` — an interactive paint app that showcases audio (UI click/blip sound effects, startup jingle), mouse drawing, button input (color/size cycling), and NeoPixels (reflecting current brush color).
 
 **12 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`
 
@@ -91,8 +91,6 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 (pixels-rainbow)                      ; fill with rainbow
 (pixels-show)
-
-(rainbow)                             ; built-in animated rainbow demo
 ```
 
 **8 Lisp functions:** `pixels-begin`, `pixels-clear`, `pixels-fill`, `pixels-set-pixel-color`, `pixels-color`, `pixels-color-hsv`, `pixels-show`, `pixels-rainbow`
@@ -170,11 +168,13 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 ## Future Work
 
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
+- **Keyboard input in graphics mode** — expose keyboard to Lisp programs for games/apps; would allow Escape key to replace button1 as abort mechanism
+- **Self-releasing notes** — `(audio-note voice note duration-ms)` for fire-and-forget sound effects
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
 - **Line editor** — enable uLisp's built-in tab completion, paren highlighting, and command recall on HDMI
 - **Autorun** — boot directly into a saved program from SD card
 - **Screen editor** — a text-mode editor for writing Lisp code on the machine
-- **USB Gamepad** — HID gamepad input for games
+- **Screensaver** — idle timeout → visual animation, any keypress returns to REPL
 
 ## Links
 
