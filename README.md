@@ -12,7 +12,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 - Single `DVHSTX8` display at **400×300 @ 8bpp** (800×600 HDMI, pixel-doubled)
 - **Text mode:** 66×37 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
-- **Line editor:** Tab autocomplete of built-in symbols, parenthesis matching (highlights matching `(` in green when `)` is typed), 8-entry command history (Up/Down arrows). Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
+- **Line editor:** Tab autocomplete of built-in symbols, parenthesis matching (highlights matching `(` in green when `)` is typed), 8-entry command history (Up/Down arrows), in-line cursor movement (Left/Right/Home/End with insert and delete at any position), Ctrl-C abort, Ctrl-U erase line. Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
 - **Graphics mode:** Full 400×300 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
 - `(graphics-mode)` / `(text-mode)` switch instantly — no hardware reconfiguration, just clear and redraw
 - `(demo)` built-in interactive demo (paint + sound + buttons + LEDs)
@@ -60,6 +60,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 - BUTTON1 (GPIO0) configured as a GPIO interrupt
 - **Short press:** abort a running program and return to the REPL
+- **Ctrl-C on keyboard:** equivalent to a short press — aborts input and returns to the REPL prompt
 - **Long press (≥1s):** also triggers USB host power-cycle recovery (forces keyboard re-enumeration)
 - Works even if USB host or the Lisp program is hung
 - If in graphics mode, automatically switches back to text mode
@@ -198,7 +199,6 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
 - **Self-releasing notes** — `(audio-note voice note duration-ms)` for fire-and-forget sound effects
 - **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
-- **Line editor cursor movement** — left/right arrow keys for in-line editing (currently append-only)
 - **Autorun** — boot directly into a saved program from SD card
 - **Screensaver** — idle timeout → visual animation, any keypress returns to REPL
 

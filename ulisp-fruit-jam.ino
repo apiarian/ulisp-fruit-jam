@@ -560,13 +560,13 @@ const char LispLibrary[] =
   #define FS_FILE_READ "r"
   #define SDCARD_SS_PIN 39
   #define CPU_RP2350
+  #include "fruitjam_escape.h"
   #include "fruitjam_terminal.h"
   #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
   #include "fruitjam_neopixel.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
-  #include "fruitjam_escape.h"
   #if defined(gfxsupport)
     #define tft display8
   #endif
@@ -9896,7 +9896,7 @@ static void line_autocomplete () {
 
   // Erase the extra chars from the previous completion
   for (int n = 0; n < line_ac_last_extra; n++) {
-    if (linebuf_len > 0) linebuf_len--;
+    if (linebuf_len > 0) { linebuf_len--; linebuf_pos--; }
     fruitjam_pserial('\b'); fruitjam_pserial(' '); fruitjam_pserial('\b');
   }
   line_ac_last_extra = 0;
@@ -9913,7 +9913,7 @@ static void line_autocomplete () {
       int klen = strlen(k);
       int before = linebuf_len;
       for (int j = line_ac_match_len; j < klen; j++) {
-        line_append_char(k[j]);
+        line_insert_char(k[j]);
       }
       line_ac_last_extra = linebuf_len - before;
       return;

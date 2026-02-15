@@ -439,10 +439,13 @@ static void fruitjam_pserial(char c) {
 #define KEY_DOWN  0x81
 #define KEY_LEFT  0x82
 #define KEY_RIGHT 0x83
+#define KEY_HOME  0x84
+#define KEY_END   0x85
 
 #define LINEBUF_SIZE 256
 static char  linebuf[LINEBUF_SIZE];
 static int   linebuf_len = 0;
+static int   linebuf_pos = 0;   // cursor position within linebuf (0..linebuf_len)
 static int   linebuf_read = 0;
 static bool  linebuf_ready = false;
 
@@ -470,16 +473,6 @@ static void line_erase_back(int n) {
     fruitjam_pserial('\b');
     fruitjam_pserial(' ');
     fruitjam_pserial('\b');
-  }
-}
-
-// Helper: append a char to linebuf and echo it
-static void line_append_char(char c) {
-  if (linebuf_len < LINEBUF_SIZE - 1) {
-    linebuf[linebuf_len++] = c;
-    fruitjam_pserial(c);
-  } else {
-    Serial.write('\a');  // bell on serial terminal — buffer full
   }
 }
 
@@ -598,12 +591,73 @@ static void line_check_paren_match() {
   // already tells the user their parens span previous lines, which is useful info too.
 }
 
+// Helper: redraw linebuf from position `from` to end, then reposition cursor.
+// Used after insert/delete in the middle of the line.
+static void line_redraw_from(int from) {
+  // Move terminal cursor to position `from` in the line
+  int col, row;
+  if (line_pos_for_index(from, &col, &row)) {
+    line_vt100_goto(col, row);
+  }
+  // Redraw from `from` to end of buffer
+  for (int i = from; i < linebuf_len; i++) {
+    fruitjam_pserial(linebuf[i]);
+  }
+  // Erase one char beyond (covers deletion case)
+  fruitjam_pserial(' ');
+  // Move cursor back to linebuf_pos
+  if (line_pos_for_index(linebuf_pos, &col, &row)) {
+    line_vt100_goto(col, row);
+  }
+}
+
+// Helper: insert a char at linebuf_pos and echo it
+static void line_insert_char(char c) {
+  if (linebuf_len >= LINEBUF_SIZE - 1) {
+    Serial.write('\a');  // bell on serial terminal — buffer full
+    return;
+  }
+  if (linebuf_pos == linebuf_len) {
+    // Append at end — simple fast path
+    linebuf[linebuf_len++] = c;
+    linebuf_pos++;
+    fruitjam_pserial(c);
+  } else {
+    // Insert in middle — shift tail right
+    memmove(&linebuf[linebuf_pos + 1], &linebuf[linebuf_pos], linebuf_len - linebuf_pos);
+    linebuf[linebuf_pos] = c;
+    linebuf_len++;
+    linebuf_pos++;
+    line_redraw_from(linebuf_pos - 1);
+  }
+}
+
+// Helper: clear the visible line and reset buffer (used by history, Ctrl-U)
+static void line_clear_visible() {
+  // Move cursor to end of line on screen, then erase backward
+  int col, row;
+  if (line_pos_for_index(linebuf_len, &col, &row)) {
+    line_vt100_goto(col, row);
+  }
+  line_erase_back(linebuf_len);
+  linebuf_len = 0;
+  linebuf_pos = 0;
+}
+
+// Helper: replace line content with history entry and position cursor at end
+static void line_load_history(int idx) {
+  for (int i = 0; i < linebuf_hist_len[idx]; i++) {
+    line_insert_char(linebuf_hist[idx][i]);
+  }
+}
+
 static int fruitjam_line_getchar(int raw_c) {
   // Drain completed line first
   if (linebuf_ready) {
     if (linebuf_read < linebuf_len) return linebuf[linebuf_read++];
     linebuf_ready = false;
     linebuf_len = 0;
+    linebuf_pos = 0;
     linebuf_read = 0;
     // Update cursor position for continuation lines (don't finalize command yet)
     line_update_input_pos();
@@ -619,11 +673,20 @@ static int fruitjam_line_getchar(int raw_c) {
     line_paren_idx = -1;
   }
 
-  // Reset history browsing on any non-arrow key
-  if (uc != KEY_UP && uc != KEY_DOWN) hist_browse = -1;
+  // Reset history browsing on any non-arrow/nav key
+  if (uc != KEY_UP && uc != KEY_DOWN && uc != KEY_LEFT && uc != KEY_RIGHT
+      && uc != KEY_HOME && uc != KEY_END) {
+    hist_browse = -1;
+  }
 
   // ---- Enter: submit line ----
   if (uc == '\n' || uc == '\r') {
+    // Move cursor to end of line on screen before newline
+    int col, row;
+    if (line_pos_for_index(linebuf_len, &col, &row)) {
+      line_vt100_goto(col, row);
+    }
+    linebuf_pos = linebuf_len;
     fruitjam_pserial('\n');
     // Accumulate this line into the command buffer (joined with spaces)
     if (linebuf_len > 0) {
@@ -648,35 +711,98 @@ static int fruitjam_line_getchar(int raw_c) {
 
   // ---- Backspace / Delete ----
   if (uc == '\b' || uc == 0x7F) {
-    if (linebuf_len > 0) {
+    if (linebuf_pos > 0) {
+      linebuf_pos--;
+      memmove(&linebuf[linebuf_pos], &linebuf[linebuf_pos + 1], linebuf_len - linebuf_pos - 1);
       linebuf_len--;
-      fruitjam_pserial('\b'); fruitjam_pserial(' '); fruitjam_pserial('\b');
+      if (linebuf_pos == linebuf_len) {
+        // Cursor was at end — simple erase
+        fruitjam_pserial('\b'); fruitjam_pserial(' '); fruitjam_pserial('\b');
+      } else {
+        // Deleted in middle — redraw from cursor
+        line_redraw_from(linebuf_pos);
+      }
     }
     line_autocomplete_reset = true;
     return -1;
   }
 
-  // ---- Ctrl-C: cancel line ----
+  // ---- Ctrl-C: abort input (same as hardware escape button) ----
   if (uc == 0x03) {
     linebuf_len = 0;
-    fruitjam_pserial('\n');
+    linebuf_pos = 0;
+    linebuf_ready = false;
+    linebuf_accum_len = 0;
     line_autocomplete_reset = true;
-    return '\n';
+    fruitjam_pserial('\n');
+    escape_button_pressed = true;  // triggers error2("escape!") on next testescape()
+    return -1;  // return to input loop, which will call testescape() and longjmp out
   }
 
   // ---- Ctrl-U: erase line ----
   if (uc == 0x15) {
-    line_erase_back(linebuf_len);
-    linebuf_len = 0;
+    line_clear_visible();
     line_autocomplete_reset = true;
     return -1;
   }
 
-  // ---- Tab: autocomplete ----
+  // ---- Tab: autocomplete (only when cursor is at end of line) ----
   if (uc == '\t') {
-    if (linebuf_len > 0) {
+    if (linebuf_len > 0 && linebuf_pos == linebuf_len) {
       line_autocomplete();
     }
+    return -1;
+  }
+
+  // ---- Left arrow: move cursor left ----
+  if (uc == KEY_LEFT) {
+    if (linebuf_pos > 0) {
+      linebuf_pos--;
+      int col, row;
+      if (line_pos_for_index(linebuf_pos, &col, &row)) {
+        line_vt100_goto(col, row);
+      }
+    }
+    line_autocomplete_reset = true;
+    return -1;
+  }
+
+  // ---- Right arrow: move cursor right ----
+  if (uc == KEY_RIGHT) {
+    if (linebuf_pos < linebuf_len) {
+      linebuf_pos++;
+      int col, row;
+      if (line_pos_for_index(linebuf_pos, &col, &row)) {
+        line_vt100_goto(col, row);
+      }
+    }
+    line_autocomplete_reset = true;
+    return -1;
+  }
+
+  // ---- Home: move cursor to start of line ----
+  if (uc == KEY_HOME) {
+    if (linebuf_pos > 0) {
+      linebuf_pos = 0;
+      int col, row;
+      if (line_pos_for_index(0, &col, &row)) {
+        line_vt100_goto(col, row);
+      }
+    }
+    line_autocomplete_reset = true;
+    return -1;
+  }
+
+  // ---- End: move cursor to end of line ----
+  if (uc == KEY_END) {
+    if (linebuf_pos < linebuf_len) {
+      linebuf_pos = linebuf_len;
+      int col, row;
+      if (line_pos_for_index(linebuf_len, &col, &row)) {
+        line_vt100_goto(col, row);
+      }
+    }
+    line_autocomplete_reset = true;
     return -1;
   }
 
@@ -685,13 +811,10 @@ static int fruitjam_line_getchar(int raw_c) {
     if (hist_count > 0) {
       int next = (hist_browse < 0) ? 1 : hist_browse + 1;
       if (next <= hist_count) {
-        line_erase_back(linebuf_len);
-        linebuf_len = 0;
+        line_clear_visible();
         hist_browse = next;
         int idx = (hist_head - hist_browse + HISTORY_SIZE) % HISTORY_SIZE;
-        for (int i = 0; i < linebuf_hist_len[idx]; i++) {
-          line_append_char(linebuf_hist[idx][i]);
-        }
+        line_load_history(idx);
       }
     }
     line_autocomplete_reset = true;
@@ -701,23 +824,19 @@ static int fruitjam_line_getchar(int raw_c) {
   // ---- Down arrow: browse history forward (or clear line) ----
   if (uc == KEY_DOWN) {
     if (hist_browse > 1) {
-      line_erase_back(linebuf_len);
-      linebuf_len = 0;
+      line_clear_visible();
       hist_browse--;
       int idx = (hist_head - hist_browse + HISTORY_SIZE) % HISTORY_SIZE;
-      for (int i = 0; i < linebuf_hist_len[idx]; i++) {
-        line_append_char(linebuf_hist[idx][i]);
-      }
+      line_load_history(idx);
     } else if (hist_browse >= 0) {
-      line_erase_back(linebuf_len);
-      linebuf_len = 0;
+      line_clear_visible();
       hist_browse = -1;
     }
     line_autocomplete_reset = true;
     return -1;
   }
 
-  // ---- Ignore other special keys (arrows, etc.) for now ----
+  // ---- Ignore other special keys ----
   if (uc >= 0x80) return -1;
 
   // ---- Ignore other control chars ----
@@ -725,10 +844,10 @@ static int fruitjam_line_getchar(int raw_c) {
 
   // ---- Normal printable character ----
   line_autocomplete_reset = true;
-  line_append_char((char)uc);
+  line_insert_char((char)uc);
 
-  // Check for parenthesis match after typing ')'
-  if (uc == ')') {
+  // Check for parenthesis match after typing ')' at end of line
+  if (uc == ')' && linebuf_pos == linebuf_len) {
     line_check_paren_match();
   }
 
