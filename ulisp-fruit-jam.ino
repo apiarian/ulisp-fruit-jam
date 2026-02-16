@@ -39,6 +39,75 @@ const char LispLibrary[] =
 // --- Keyboard helpers ---
 "(defun key-code (k) (logand k 255)) "
 "(defun key-mod (k) (logand (ash k -8) 255)) "
+// --- Package system ---
+// *pkgs* is an alist: (("filename" . (sym1 sym2 ...)) ...)
+"(defvar *pkgs* nil) "
+
+// package-load: read+eval file, track new symbols, return them
+"(defun package-load (f) "
+  "\"Load and eval a Lisp file from SD, tracking new symbols as a package. Returns the list of new symbols.\" "
+  "(package-unload f) "
+  "(let ((before (globals))) "
+    "(with-sd-card (s f) "
+      "(loop (let ((form (read s))) "
+        "(unless form (return)) "
+        "(eval form)))) "
+    "(let ((new (mapcan (lambda (s) (unless (member s before) (list s))) (globals)))) "
+      "(setf *pkgs* (cons (cons f new) *pkgs*)) "
+      "new))) "
+
+// package-save: write tracked symbols to file
+"(defun package-save (f) "
+  "\"Save a loaded package's symbols back to file on SD as defun/defvar forms.\" "
+  "(let ((pkg (assoc f *pkgs* :test #'string=))) "
+    "(unless pkg (error \"package not found: ~a\" f)) "
+    "(with-sd-card (s f 2) "
+      "(dolist (sym (cdr pkg)) "
+        "(let ((val (eval sym))) "
+          "(if (and (consp val) (eq (car val) 'lambda)) "
+            "(pprint (cons 'defun (cons sym (cdr val))) s) "
+            "(pprint (list 'defvar sym (list 'quote val)) s))))))) "
+
+// package-unload: remove tracked symbols, drop package
+"(defun package-unload (f) "
+  "\"Unbind all symbols tracked by package f and remove it from *pkgs*.\" "
+  "(let ((pkg (assoc f *pkgs* :test #'string=))) "
+    "(when pkg "
+      "(dolist (sym (cdr pkg)) (makunbound sym)) "
+      "(setf *pkgs* (mapcan (lambda (p) (unless (string= (car p) f) (list p))) *pkgs*))))) "
+
+// package-add: track an existing symbol in a package, creating it if needed
+"(defun package-add (f sym) "
+  "\"Add symbol sym to package f's tracking list, creating the package if it doesn't exist. Returns sym.\" "
+  "(let ((pkg (assoc f *pkgs* :test #'string=))) "
+    "(unless pkg "
+      "(setf *pkgs* (cons (cons f nil) *pkgs*)) "
+      "(setf pkg (car *pkgs*))) "
+    "(unless (member sym (cdr pkg)) "
+      "(setf (cdr pkg) (cons sym (cdr pkg)))) "
+    "sym)) "
+
+// package-remove: untrack symbol, optionally makunbound
+"(defun package-remove (f sym &optional unbind) "
+  "\"Remove sym from package f's tracking list. If unbind is true, also makunbound sym. Returns sym.\" "
+  "(let ((pkg (assoc f *pkgs* :test #'string=))) "
+    "(unless pkg (error \"package not found: ~a\" f)) "
+    "(setf (cdr pkg) (mapcan (lambda (s) (unless (eq s sym) (list s))) (cdr pkg))) "
+    "(when unbind (makunbound sym)) "
+    "sym)) "
+
+// package-symbols: list tracked symbols
+"(defun package-symbols (f) "
+  "\"Return the list of symbols tracked by package f.\" "
+  "(let ((pkg (assoc f *pkgs* :test #'string=))) "
+    "(unless pkg (error \"package not found: ~a\" f)) "
+    "(cdr pkg))) "
+
+// package-list: list loaded package names
+"(defun package-list () "
+  "\"Return a list of all loaded package names (filenames).\" "
+  "(mapcar #'car *pkgs*)) "
+
 // --- Helper: update NeoPixels to show current brush color ---
 "(defun demo-leds (r g b) "
   "(dotimes (i 5) "

@@ -146,10 +146,48 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - BUTTON2 (GPIO4) and BUTTON3 (GPIO5) are the primary buttons for user programs
 - BUTTON1 (GPIO0) is readable but not practically useful from Lisp — its escape interrupt fires on press before the result can be used
 
-### SD Card Support
+### SD Card & Package Management
 
 - `save-image` / `load-image` save and restore the entire workspace to MicroSD
-- `with-sd-card` provides text file I/O for reading/writing `.lsp` source files
+- `with-sd-card` provides low-level text file I/O for reading/writing files
+- **Package system** for file-based Lisp development — load `.lsp` source files, track which symbols they define, save modified code back, unload cleanly
+- All package functions have docstrings — use `(documentation 'package-load)` etc. at the REPL for help
+
+```lisp
+;; Load a file, creating a package that tracks its definitions
+(package-load "game.lsp")       ; → (main draw-frame init)
+
+;; Run the program
+(main)
+
+;; Edit a function with the built-in tree editor, then save back
+(edit 'draw-frame)
+(package-save "game.lsp")
+
+;; Define something new at the REPL, add it to the package
+(defun new-helper (x) (* x x))
+(package-add "game.lsp" 'new-helper)
+(package-save "game.lsp")
+
+;; Create a brand-new package from scratch (no file needed)
+(defun greet () (princ "hello"))
+(defun farewell () (princ "bye"))
+(package-add "utils.lsp" 'greet)     ; auto-creates the package
+(package-add "utils.lsp" 'farewell)  ; adds to existing package
+(package-save "utils.lsp")           ; writes to SD card
+
+;; Reload after editing the file externally
+(package-load "game.lsp")       ; unloads old, reloads fresh
+
+;; Inspect and manage packages
+(package-list)                   ; → ("utils.lsp" "game.lsp")
+(package-symbols "game.lsp")    ; → (new-helper main draw-frame init)
+(package-remove "game.lsp" 'old-fn)   ; stop tracking
+(package-remove "game.lsp" 'old-fn t) ; also remove from workspace
+(package-unload "game.lsp")     ; remove all symbols, drop package
+```
+
+**7 Lisp functions:** `package-load`, `package-save`, `package-unload`, `package-add`, `package-remove`, `package-symbols`, `package-list`
 
 ### Wi-Fi (via ESP32-C6)
 
