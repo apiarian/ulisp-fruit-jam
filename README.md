@@ -216,9 +216,15 @@ Audio synthesis runs on core0 in the `testescape()` idle loop, filling a 1024-sa
 
 All Fruit Jam-specific code lives in separate `.h` files, included from the board config block. The main `.ino` has minimal `#if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)` blocks outside the board config section, keeping the diff against upstream uLisp small for easy merging of future releases.
 
-### Workspace
+### Workspace — PSRAM Enabled (1,000,000 Objects)
 
-With `DVHSTX8` at 400×300, the workspace is **36,000 objects** (ARM). The framebuffer (~145KB) is permanently allocated from heap. PSRAM support (1,000,000 objects) is a future goal pending resolution of the HSTX+PSRAM coexistence issue.
+The Fruit Jam's 8MB PSRAM is **enabled**, providing a workspace of **~1,000,000 Lisp objects** (~8MB). This is a ~28× increase over the SRAM-only workspace (~36,000 objects) and makes object count essentially a non-concern for any realistic program.
+
+The PSRAM required a timing fix: the Arduino core initializes PSRAM at boot (125 MHz), but the DVHSTX display library then changes the system clock to 240 MHz via a global constructor, leaving the PSRAM QMI timing registers misconfigured (PSRAM SCK = 120 MHz, exceeding the 109 MHz max). A `psram_reinit_timing()` call in `setup()` recalculates the correct timing for 240 MHz (divisor 3, PSRAM SCK = 80 MHz). This was the root cause of the upstream "HSTX + PSRAM don't work together" issue.
+
+The GC (mark-sweep over all 1M objects) takes several seconds. The `printfreespace` compile option is disabled to avoid a GC pass on every REPL prompt. Use `(room)` to check free objects on demand.
+
+A PSRAM stress test (`tools/stress-test.lsp`) validates data integrity under concurrent HSTX video DMA, I2S audio DMA, USB host activity, and heavy GC pressure. Tested: 500+ rounds, 0 errors.
 
 ## Building
 
@@ -254,7 +260,7 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 ## Future Work
 
 - **Screen editor** — a graphics-mode editor for writing Lisp code on the machine (now feasible with keyboard input)
-- **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
+- ~~**PSRAM**~~ ✅ Done — 8MB / 1M objects, HSTX coexistence solved
 - ~~**Better terminal font**~~ ✅ Done — replaced with [unscii-8-thin](https://github.com/viznut/unscii) 8×8 font
 - **Autorun** — boot directly into a saved program from SD card
 - ~~**Screensaver**~~ ✅ Done — blanks screen after 5 min idle, gentle NeoPixel wave animation, any keypress wakes

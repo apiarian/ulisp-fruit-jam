@@ -259,7 +259,7 @@ const char LispLibrary[] =
 // Compile options
 
 // #define resetautorun
-#define printfreespace
+// #define printfreespace
 // #define printgcs
 #define sdcardsupport
 #define gfxsupport
@@ -603,7 +603,7 @@ const char LispLibrary[] =
   #define CPU_RP2350
 
 #elif defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  // #define BOARD_HAS_PSRAM               /* Uncomment to use PSRAM */
+  #define BOARD_HAS_PSRAM               /* Enable 8MB PSRAM → 1M Lisp objects */
   #if defined(BOARD_HAS_PSRAM)
   #undef MEMBANK
   #define MEMBANK PSRAM
@@ -860,7 +860,12 @@ void errorsub (symbol_t fname, const char *string) {
   pfstring(string, pserial);
 }
 
-void errorend () { GCStack = NULL; longjmp(*handler, 1); }
+void errorend () {
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (fruitjam_gfx_active) fruitjam_exit_graphics();
+  #endif
+  GCStack = NULL; longjmp(*handler, 1);
+}
 
 /*
   errorsym - prints an error message and reenters the REPL.
@@ -10287,6 +10292,7 @@ void testescape () {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   if (fruitjam_escape_check()) {
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
+    digitalWrite(29, HIGH);  // Turn off onboard LED (active-low on Fruit Jam)
     for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
       audio_voices[i].volume = 0;
       audio_voices[i].phase_inc = 0;
@@ -11349,6 +11355,16 @@ void setup () {
   Serial.begin(9600);
   int start = millis();
   while ((millis() - start) < 5000) { if (Serial) break; }
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350) && defined(BOARD_HAS_PSRAM)
+  // The DVHSTX library's global constructor (init_priority 101) changes clk_sys
+  // from 125 MHz to 240 MHz AFTER the Arduino core's PSRAM init ran at 125 MHz.
+  // The PSRAM QMI timing (divisor, rxdelay) must be recalculated for the actual
+  // clock speed, otherwise PSRAM SCK = 240/2 = 120 MHz exceeds the 109 MHz max.
+  {
+    extern void psram_reinit_timing(uint32_t hz);
+    psram_reinit_timing(0);  // 0 = auto-detect current clk_sys
+  }
+  #endif
   initworkspace();
   initenv();
   initsleep();
