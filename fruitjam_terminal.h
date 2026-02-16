@@ -1,5 +1,5 @@
 // fruitjam_terminal.h — Terminal emulator for Fruit Jam
-// Renders text into DVHSTX8 framebuffer at 400×300 using unscii-8-thin 8×8 font.
+// Renders text into DVHSTX8 framebuffer at 512×384 using unscii-8-thin 8×8 font.
 // Single display object — no mode switching, rock solid.
 // Provides VT100/ANSI escape sequence handling, scrolling, cursor.
 
@@ -12,27 +12,27 @@
 
 #include "fruitjam_font.h"
 
-// Graphics resolution — 400×300 8bpp, pixel-doubled to 800×600 HDMI
-#define DISPLAY_WIDTH  400
-#define DISPLAY_HEIGHT 300
+// Graphics resolution — 512×384 8bpp, pixel-doubled to 1024×768 HDMI
+#define DISPLAY_WIDTH  512
+#define DISPLAY_HEIGHT 384
 
 // Character cell dimensions (unscii-8-thin 8×8 font)
 #define CHAR_W 8
 #define CHAR_H 8
 
 // Terminal grid size
-#define TERM_COLS (DISPLAY_WIDTH / CHAR_W)   // 50
-#define TERM_ROWS (DISPLAY_HEIGHT / CHAR_H)  // 37
+#define TERM_COLS (DISPLAY_WIDTH / CHAR_W)   // 64
+#define TERM_ROWS (DISPLAY_HEIGHT / CHAR_H)  // 48
 
 #ifndef FRUITJAM_NO_DISPLAY
 
-// ---- Display object — DVHSTX8 at 400×300 ----
+// ---- Display object — DVHSTX8 at 512×384 ----
 // Third arg = double_buffered (false = single-buffered).
 // Note: GFXcanvas8 buffer allocation is always suppressed by a hardcoded
 // `false` inside the DVHSTX8 constructor — the actual framebuffer is
 // malloc'd by the HSTX driver in begin().
 static DVHSTXPinout fruitjamPinConfig = ADAFRUIT_FRUIT_JAM_CFG;
-static DVHSTX8 display8(fruitjamPinConfig, DVHSTX_RESOLUTION_400x300, false);
+static DVHSTX8 display8(fruitjamPinConfig, DVHSTX_RESOLUTION_512x384, false);
 
 // ---- Palette color indices for terminal ----
 // DVHSTX8 uses a 2-3-2 RGB palette by default.
@@ -202,13 +202,13 @@ static void term_bell_unflash() {
     for (int c = TERM_COLS - border_cols; c < TERM_COLS; c++) term_draw_cell(c, r);
   }
   // Clear the gutter — the gap between the terminal grid and the display edge.
-  // The grid is TERM_COLS*CHAR_W × TERM_ROWS*CHAR_H (400×296) but the display
-  // is 400×300, leaving 0 pixels on the right and 4 on the bottom that no
-  // terminal cell covers.
+  // The grid is TERM_COLS*CHAR_W × TERM_ROWS*CHAR_H (512×384) — exact fit.
+  // No gutter pixels, but the code handles it generically in case we change
+  // resolution again.
   uint8_t *buf = display8.getBuffer();
   if (!buf) return;
-  int grid_w = TERM_COLS * CHAR_W;   // 400
-  int grid_h = TERM_ROWS * CHAR_H;   // 296
+  int grid_w = TERM_COLS * CHAR_W;   // 512
+  int grid_h = TERM_ROWS * CHAR_H;   // 384
   // Right gutter (columns grid_w..DISPLAY_WIDTH-1, all rows)
   if (grid_w < DISPLAY_WIDTH) {
     int gutter_w = DISPLAY_WIDTH - grid_w;
@@ -463,7 +463,7 @@ extern volatile bool fruitjam_clocks_ready;
 
 static bool fruitjam_terminal_begin() {
   #ifndef FRUITJAM_NO_DISPLAY
-  Serial.println("[TERM] Starting DVHSTX8 at 400x300...");
+  Serial.println("[TERM] Starting DVHSTX8 at 512x384...");
   Serial.flush();
 
   if (!display8.begin()) {

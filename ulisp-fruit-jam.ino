@@ -116,7 +116,7 @@ const char LispLibrary[] =
 
 // --- Helper: draw the color palette bar and brush size indicator ---
 "(defun demo-ui (ci colors sz col) "
-  "(let ((n (length colors)) (bw 16) (bh 12) (by 285)) "
+  "(let ((n (length colors)) (bw 16) (bh 12) (by 369)) "
     // draw palette swatches
     "(let ((x 4)) "
       "(dotimes (i n) "
@@ -131,11 +131,11 @@ const char LispLibrary[] =
             "(draw-rect (- x 1) (- by 1) (+ bw 2) (+ bh 2) 0)) "
           "(setq x (+ x bw 3))))) "
     // brush size preview in bottom right
-    "(fill-rect 360 281 39 19 0) "
+    "(fill-rect 472 365 39 19 0) "
     "(if (= col 0) "
-      "(draw-circle 380 290 sz 150) "
-      "(fill-circle 380 290 sz col)) "
-    "(draw-rect 359 280 40 20 64))) "
+      "(draw-circle 492 374 sz 150) "
+      "(fill-circle 492 374 sz col)) "
+    "(draw-rect 471 364 40 20 64))) "
 
 // --- Helper: play a click sound (short square wave) ---
 "(defun demo-click (note) "
@@ -163,7 +163,7 @@ const char LispLibrary[] =
          "(b2 nil) (b3 nil) "
          "(was-drawing nil)) "
     // title
-    "(set-cursor 128 4) "
+    "(set-cursor 184 4) "
     "(set-text-color 223 0) "
     "(set-text-size 2) "
     "(with-gfx (s) (princ \"Fruit Jam\" s)) "
@@ -172,8 +172,8 @@ const char LispLibrary[] =
     "(set-text-color 150 0) "
     "(with-gfx (s) (princ \"Mouse:draw c/B2:color s/B3:size x:clear Esc:quit\" s)) "
     // draw separator line
-    "(draw-line 0 38 399 38 64) "
-    "(draw-line 0 280 399 280 64) "
+    "(draw-line 0 38 511 38 64) "
+    "(draw-line 0 364 511 364 64) "
     // initial UI + LEDs
     "(demo-ui ci colors sz col) "
     "(let ((cc (nth ci colors))) "
@@ -215,7 +215,7 @@ const char LispLibrary[] =
       "(if (> (mouse-buttons) 0) "
         "(progn "
           "(let ((mx (mouse-x)) (my (mouse-y))) "
-            "(when (and (> my 38) (< my 280)) "
+            "(when (and (> my 38) (< my 364)) "
               "(if (> sz 1) "
                 "(fill-circle mx my sz col) "
                 "(draw-pixel mx my col)) "
@@ -250,7 +250,7 @@ const char LispLibrary[] =
                 "(demo-click (+ 72 (* si 3)))) "
               // 'x' or 'X' — clear canvas
               "((or (= kc 120) (= kc 88)) "
-                "(fill-rect 0 39 400 241 0) "
+                "(fill-rect 0 39 512 325 0) "
                 "(demo-click 48)))))) "
       "(delay 8))))"
 ;
@@ -612,7 +612,7 @@ const char LispLibrary[] =
   #elif defined(__riscv)
   #define WORKSPACESIZE (35500-SDSIZE)    /* Objects (8*bytes) */
   #define STACKDIFF 580
-  #else                                   /* ARM with DVHSTX8 400x300 (~142KB from heap) */
+  #else                                   /* ARM with DVHSTX8 512x384 (~204KB from heap) */
   #define WORKSPACESIZE (36000-SDSIZE)    /* Objects (8*bytes) */
   #define STACKDIFF 520
   #endif
@@ -3736,7 +3736,7 @@ void doze (int secs) {
 const int PPINDENT = 2;
 const int PPWIDTH = 80;
 #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-const int GFXPPWIDTH = 50; // 400 pixel wide screen (400/8, unscii-8-thin font)
+const int GFXPPWIDTH = 64; // 512 pixel wide screen (512/8, unscii-8-thin font)
 #else
 const int GFXPPWIDTH = 52; // 320 pixel wide screen
 #endif
@@ -7889,7 +7889,7 @@ object *fn_displaysize (object *args, object *env) {
 
 /*
   (graphics-mode)
-  Switches the display to graphics mode (400x300 8bpp). Returns t on success, or signals an error on failure.
+  Switches the display to graphics mode (512x384 8bpp). Returns t on success, or signals an error on failure.
 */
 object *fn_graphicsmode (object *args, object *env) {
   (void) args, (void) env;
@@ -7904,7 +7904,7 @@ object *fn_graphicsmode (object *args, object *env) {
 
 /*
   (text-mode)
-  Switches the display back to text mode (66x37 terminal). Returns t.
+  Switches the display back to text mode (64x48 terminal). Returns t.
 */
 object *fn_textmode (object *args, object *env) {
   (void) args, (void) env;
@@ -7919,7 +7919,7 @@ object *fn_textmode (object *args, object *env) {
 
 /*
   (mouse-x)
-  Returns the current mouse cursor X position (0 to 399).
+  Returns the current mouse cursor X position (0 to 511).
 */
 object *fn_mousex (object *args, object *env) {
   (void) args, (void) env;
@@ -7932,7 +7932,7 @@ object *fn_mousex (object *args, object *env) {
 
 /*
   (mouse-y)
-  Returns the current mouse cursor Y position (0 to 299).
+  Returns the current mouse cursor Y position (0 to 383).
 */
 object *fn_mousey (object *args, object *env) {
   (void) args, (void) env;
@@ -9485,13 +9485,13 @@ const char doc250[] = "(display-size)\n"
 "Returns a list of (width height) to give the display dimensions in the current orientation.";
 #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
 const char doc267[] = "(graphics-mode)\n"
-"Switches the display to graphics mode (400x300, 256 colours). Returns t on success.";
+"Switches the display to graphics mode (512x384, 256 colours). Returns t on success.";
 const char doc268[] = "(text-mode)\n"
-"Switches the display back to text mode (66x37 terminal). Returns t.";
+"Switches the display back to text mode (64x48 terminal). Returns t.";
 const char doc269[] = "(mouse-x)\n"
-"Returns the current mouse cursor X position (0 to 399).";
+"Returns the current mouse cursor X position (0 to 511).";
 const char doc270[] = "(mouse-y)\n"
-"Returns the current mouse cursor Y position (0 to 299).";
+"Returns the current mouse cursor Y position (0 to 383).";
 const char doc271[] = "(mouse-buttons)\n"
 "Returns the mouse button state as a bitmask: bit 0 = left, bit 1 = right, bit 2 = middle.";
 const char doc272[] = "(mouse-click)\n"

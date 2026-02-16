@@ -10,12 +10,12 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
-- Single `DVHSTX8` display at **400×300 @ 8bpp** (800×600 HDMI, pixel-doubled)
-- **Text mode:** 50×37 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
+- Single `DVHSTX8` display at **512×384 @ 8bpp** (1024×768 HDMI, pixel-doubled)
+- **Text mode:** 64×48 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
 - **[unscii-8-thin](https://github.com/viznut/unscii) font** — 8×8 pixel bitmap font used throughout (terminal and graphics mode text). Clean, readable, designed for screens. Replaces the default Adafruit_GFX 5×7 font.
 - **Line editor:** Tab autocomplete of both **user-defined and built-in symbols** (cycles through all matches, wrapping around), parenthesis matching (highlights matching `(` in green when `)` is typed), 8-entry command history (Up/Down arrows), in-line cursor movement (Left/Right/Home/End with insert and delete at any position), Ctrl-C abort, Ctrl-U erase line. Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
 - **Terminal bell:** BEL character (`\a` / 0x07) triggers a brief yellow screen-border flash and a short audio blip (~1047 Hz sine, 60ms). Fires on buffer-full in the line editor and from Lisp via `(princ (code-char 7))`.
-- **Graphics mode:** Full 400×300 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
+- **Graphics mode:** Full 512×384 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
 - `(graphics-mode)` / `(text-mode)` switch instantly — no hardware reconfiguration, just clear and redraw
 - `(demo)` built-in interactive demo (paint + sound + buttons + LEDs)
 - Terminal text persists through graphics mode — returns exactly where you left off
@@ -201,7 +201,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 ## Architecture
 
 ```
-Core 0: uLisp interpreter + display (DVHSTX8 400×300) + audio synthesis
+Core 0: uLisp interpreter + display (DVHSTX8 512×384) + audio synthesis
 Core 1: USB host keyboard + mouse (PIO USB via TinyUSB)
 
 Hardware: HSTX → HDMI, PIO 0 → I2S audio, PIO 2 → USB host + NeoPixels

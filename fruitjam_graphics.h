@@ -26,8 +26,8 @@ static bool     fruitjam_text_wrap = true;
 // ---- Mouse state (shared between cores) ----
 // Defined here (before fruitjam_usbhost.h) so both files can see them.
 // Updated by core1 (USB host), read by core0 (Lisp API).
-static volatile int16_t  mouse_x = 200;
-static volatile int16_t  mouse_y = 150;
+static volatile int16_t  mouse_x = 10;
+static volatile int16_t  mouse_y = 10;
 static volatile uint8_t  mouse_buttons = 0;
 static volatile bool     mouse_clicked = false;
 
