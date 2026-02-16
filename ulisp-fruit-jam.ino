@@ -7224,6 +7224,9 @@ object *fn_wifiserver (object *args, object *env) {
   #if defined (ULISP_WIFI)
   (void) args, (void) env;
   server.begin();
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  fruitjam_audio_reinit_dac(); // WiFiNINA SPI init may have reset TLV320 via shared GPIO22
+  #endif
   return nil;
   #else
   (void) args, (void) env;
@@ -7253,6 +7256,9 @@ object *fn_wifisoftap (object *args, object *env) {
     }
     WiFi.beginAP(cstring(first, ssid, 33), cstring(second, pass, 65), channel);
   }
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  fruitjam_audio_reinit_dac(); // WiFiNINA SPI init may have reset TLV320 via shared GPIO22
+  #endif
   return iptostring(WiFi.localIP());
   #else
   (void) args, (void) env;
@@ -7307,6 +7313,9 @@ object *fn_wificonnect (object *args, object *env) {
     if (cddr(args) != NULL) WiFi.config(ipstring(third(args)));
     result = WiFi.begin(cstring(first(args), ssid, 33), cstring(second(args), pass, 65));
   }
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  fruitjam_audio_reinit_dac(); // WiFiNINA SPI init may have reset TLV320 via shared GPIO22
+  #endif
   if (result == WL_CONNECTED) {
     #if defined(ARDUINO_RASPBERRY_PI_PICO_W) || defined(ARDUINO_RASPBERRY_PI_PICO_2W)
       NTP.begin("pool.ntp.org");

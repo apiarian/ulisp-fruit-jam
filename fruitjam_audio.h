@@ -147,6 +147,7 @@ static uint32_t *audio_ring_buf = NULL;
 static volatile size_t audio_write_idx = 0;
 static volatile size_t audio_read_idx = 0;
 static bool audio_initialized = false;
+static bool audio_dac_reinit_needed = false; // set true at init; cleared after first WiFi reinit
 static audio_voice_t audio_voices[AUDIO_TOTAL_VOICES];
 static uint8_t audio_master_vol = 255; // master volume 0-255
 static bool audio_hp_inserted = false;    // current headphone state
@@ -734,6 +735,7 @@ static void fruitjam_audio_init(void) {
     Serial.println("audio: headphone detect via polling");
 
     audio_initialized = true;
+    audio_dac_reinit_needed = true; // WiFi hasn't initialized yet; first WiFi call will reset DAC
 
     // Set up the private bell voice (sine wave, fixed volume)
     bell_voice_init();
@@ -743,6 +745,22 @@ static void fruitjam_audio_init(void) {
     audio_apply_output_routing();
 
     Serial.println("audio: initialization complete");
+}
+
+// Re-initialize the TLV320 DAC after an external reset (e.g., WiFiNINA toggling
+// the shared GPIO22 peripheral reset pin). Re-runs I2C configuration and output
+// routing without touching PIO/DMA/ring buffer (those are unaffected by a DAC reset).
+// Safe to call multiple times; does nothing if audio was never initialized.
+static void fruitjam_audio_reinit_dac(void) {
+    if (!audio_initialized || !audio_dac_reinit_needed) return;
+    audio_dac_reinit_needed = false;
+    Serial.println("audio: re-initializing TLV320 after peripheral reset");
+    // The WiFiNINA SPI driver may have reconfigured GPIO20/21 pin mux or I2C state.
+    // Re-run the full TLV320 init which includes I2C bus setup + all register writes.
+    audio_tlv320_init();
+    audio_hp_detect_check();
+    audio_apply_output_routing();
+    Serial.println("audio: TLV320 re-init complete");
 }
 
 // ---- Synthesis ----
