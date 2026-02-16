@@ -762,6 +762,14 @@ static int fruitjam_line_getchar(int raw_c) {
 
   // ---- Enter: submit line ----
   if (uc == '\n' || uc == '\r') {
+    // Empty line: just return newline without repositioning cursor.
+    // This avoids jumping back to a stale line_start position when
+    // gserial() is called from non-REPL contexts (e.g. the tree editor).
+    if (linebuf_len == 0) {
+      fruitjam_pserial('\n');
+      line_update_input_pos();  // resync start position to current cursor
+      return '\n';
+    }
     // Move cursor to end of line on screen before newline
     int col, row;
     if (line_pos_for_index(linebuf_len, &col, &row)) {
@@ -770,23 +778,20 @@ static int fruitjam_line_getchar(int raw_c) {
     linebuf_pos = linebuf_len;
     fruitjam_pserial('\n');
     // Accumulate this line into the command buffer (joined with spaces)
-    if (linebuf_len > 0) {
-      if (linebuf_accum_len > 0 && linebuf_accum_len < LINEBUF_SIZE - 1) {
-        linebuf_accum[linebuf_accum_len++] = ' ';  // space separator between lines
-      }
-      int copy_len = linebuf_len;
-      if (linebuf_accum_len + copy_len > LINEBUF_SIZE - 1) {
-        copy_len = LINEBUF_SIZE - 1 - linebuf_accum_len;
-      }
-      if (copy_len > 0) {
-        memcpy(linebuf_accum + linebuf_accum_len, linebuf, copy_len);
-        linebuf_accum_len += copy_len;
-      }
+    if (linebuf_accum_len > 0 && linebuf_accum_len < LINEBUF_SIZE - 1) {
+      linebuf_accum[linebuf_accum_len++] = ' ';  // space separator between lines
+    }
+    int copy_len = linebuf_len;
+    if (linebuf_accum_len + copy_len > LINEBUF_SIZE - 1) {
+      copy_len = LINEBUF_SIZE - 1 - linebuf_accum_len;
+    }
+    if (copy_len > 0) {
+      memcpy(linebuf_accum + linebuf_accum_len, linebuf, copy_len);
+      linebuf_accum_len += copy_len;
     }
     linebuf_ready = true;
     linebuf_read = 0;
     line_autocomplete_reset = true;
-    if (linebuf_len == 0) { linebuf_ready = false; return '\n'; }
     return linebuf[linebuf_read++];
   }
 
@@ -924,6 +929,10 @@ static int fruitjam_line_getchar(int raw_c) {
   if (uc < 32) return -1;
 
   // ---- Normal printable character ----
+  // Resync start position when beginning a fresh input line, so that
+  // cursor positioning (paren highlight, end-of-line goto on Enter) uses
+  // the correct origin even if output was printed since the last line.
+  if (linebuf_len == 0) line_update_input_pos();
   line_autocomplete_reset = true;
   line_insert_char((char)uc);
 
