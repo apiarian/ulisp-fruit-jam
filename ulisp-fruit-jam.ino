@@ -113,8 +113,8 @@ const char LispLibrary[] =
     "(mouse-show) "
     "(keyboard-flush) "
     // setup audio voices for UI sounds
-    "(audio-wave 0 2) (audio-vol 0 100) "
-    "(audio-wave 1 1) (audio-vol 1 60) "
+    "(audio-wave 0 2) (audio-vol 0 15) "
+    "(audio-wave 1 1) (audio-vol 1 10) "
     // play startup jingle
     "(audio-wave 2 1) (audio-vol 2 100) "
     "(audio-envelope 2 10 150 80 300) "
