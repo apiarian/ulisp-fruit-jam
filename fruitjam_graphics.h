@@ -12,6 +12,14 @@
 // ---- Graphics state ----
 static volatile bool fruitjam_gfx_active = false;
 
+// ---- GFX text state (shadows for Adafruit_GFX protected members) ----
+// Tracked here because gfxwrite() needs them but they're protected in Adafruit_GFX.
+// Updated by the Lisp functions set-text-color, set-text-size, set-text-wrap.
+static uint8_t  fruitjam_text_fg = 0xFF;   // white
+static uint8_t  fruitjam_text_bg = 0xFF;   // same as fg = transparent (GFX convention)
+static uint8_t  fruitjam_text_size = 1;
+static bool     fruitjam_text_wrap = true;
+
 // ---- Mouse state (shared between cores) ----
 // Defined here (before fruitjam_usbhost.h) so both files can see them.
 // Updated by core1 (USB host), read by core0 (Lisp API).

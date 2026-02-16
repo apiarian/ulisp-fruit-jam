@@ -11,7 +11,8 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
 - Single `DVHSTX8` display at **400×300 @ 8bpp** (800×600 HDMI, pixel-doubled)
-- **Text mode:** 66×37 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
+- **Text mode:** 50×37 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
+- **[unscii-8-thin](https://github.com/viznut/unscii) font** — 8×8 pixel bitmap font used throughout (terminal and graphics mode text). Clean, readable, designed for screens. Replaces the default Adafruit_GFX 5×7 font.
 - **Line editor:** Tab autocomplete of built-in symbols, parenthesis matching (highlights matching `(` in green when `)` is typed), 8-entry command history (Up/Down arrows), in-line cursor movement (Left/Right/Home/End with insert and delete at any position), Ctrl-C abort, Ctrl-U erase line. Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
 - **Terminal bell:** BEL character (`\a` / 0x07) triggers a brief yellow screen-border flash and a short audio blip (~1047 Hz sine, 60ms). Fires on buffer-full in the line editor and from Lisp via `(princ (code-char 7))`.
 - **Graphics mode:** Full 400×300 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
@@ -161,7 +162,7 @@ Interrupts: BUTTON1 (GPIO0) → escape, DMA_IRQ_1 → audio
 Headphone detect: polled via I2C every 500ms (not GPIO IRQ — single callback per core)
 ```
 
-The display uses a single `DVHSTX8` object for both terminal and graphics. Text mode renders characters via `Adafruit_GFX::drawChar()` into the pixel framebuffer with a character grid stored in RAM for scrolling and restore. Graphics mode clears the framebuffer and enables GFX drawing primitives. Switching between modes is instant — no HSTX reinitialization, no PLL changes, no DMA teardown.
+The display uses a single `DVHSTX8` object for both terminal and graphics. Text mode renders characters from the unscii-8-thin bitmap font directly into the 8bpp pixel framebuffer, with a character grid stored in RAM for scrolling and restore. Graphics mode clears the framebuffer and enables GFX drawing primitives. Switching between modes is instant — no HSTX reinitialization, no PLL changes, no DMA teardown. The same font is used for `(draw-char)` and `(with-gfx)` text in graphics mode.
 
 Audio synthesis runs on core0 in the `testescape()` idle loop, filling a 1024-sample ring buffer that DMA streams to the TLV320DAC3100 via PIO I2S. The synth mixes 5 voices (wavetable lookup + ADSR envelope) per sample — about 0.5% CPU at 22050 Hz.
 
@@ -206,7 +207,7 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 
 - **Screen editor** — a graphics-mode editor for writing Lisp code on the machine (now feasible with keyboard input)
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
-- **Better terminal font** — replace the 6×8 bitmap with a more readable font (8×16 VGA, Terminus, or converted Intel One Mono)
+- ~~**Better terminal font**~~ ✅ Done — replaced with [unscii-8-thin](https://github.com/viznut/unscii) 8×8 font
 - **Autorun** — boot directly into a saved program from SD card
 - **Screensaver** — idle timeout → visual animation, any keypress returns to REPL
 

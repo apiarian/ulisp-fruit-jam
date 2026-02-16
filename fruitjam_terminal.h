@@ -1,5 +1,5 @@
 // fruitjam_terminal.h — Terminal emulator for Fruit Jam
-// Renders text into DVHSTX8 framebuffer at 400×300 using Adafruit_GFX drawChar()
+// Renders text into DVHSTX8 framebuffer at 400×300 using unscii-8-thin 8×8 font.
 // Single display object — no mode switching, rock solid.
 // Provides VT100/ANSI escape sequence handling, scrolling, cursor.
 
@@ -10,16 +10,18 @@
 #include <Adafruit_dvhstx.h>
 #endif
 
+#include "fruitjam_font.h"
+
 // Graphics resolution — 400×300 8bpp, pixel-doubled to 800×600 HDMI
 #define DISPLAY_WIDTH  400
 #define DISPLAY_HEIGHT 300
 
-// Character cell dimensions (built-in 6×8 font from Adafruit_GFX)
-#define CHAR_W 6
+// Character cell dimensions (unscii-8-thin 8×8 font)
+#define CHAR_W 8
 #define CHAR_H 8
 
 // Terminal grid size
-#define TERM_COLS (DISPLAY_WIDTH / CHAR_W)   // 66
+#define TERM_COLS (DISPLAY_WIDTH / CHAR_W)   // 50
 #define TERM_ROWS (DISPLAY_HEIGHT / CHAR_H)  // 37
 
 #ifndef FRUITJAM_NO_DISPLAY
@@ -147,14 +149,11 @@ static void term_draw_cell(int col, int row) {
   if (col < 0 || col >= TERM_COLS || row < 0 || row >= TERM_ROWS) return;
   if (term_draw_suppressed) return;
   TermCell &cell = term_grid[row][col];
-  int px = col * CHAR_W;
-  int py = row * CHAR_H;
-  // Draw background
-  display8.fillRect(px, py, CHAR_W, CHAR_H, cell.bg);
-  // Draw character (only printable)
-  if (cell.ch >= 32 && cell.ch < 127) {
-    display8.drawChar(px, py, cell.ch, cell.fg, cell.bg, 1);
-  }
+  uint8_t *fb = display8.getBuffer();
+  if (!fb) return;
+  fruitjam_draw_char_8x8(fb, DISPLAY_WIDTH,
+                          col * CHAR_W, row * CHAR_H,
+                          cell.ch, cell.fg, cell.bg);
 }
 
 // ---- Terminal bell — visual flash ----
@@ -203,12 +202,12 @@ static void term_bell_unflash() {
     for (int c = TERM_COLS - border_cols; c < TERM_COLS; c++) term_draw_cell(c, r);
   }
   // Clear the gutter — the gap between the terminal grid and the display edge.
-  // The grid is TERM_COLS*CHAR_W × TERM_ROWS*CHAR_H (396×296) but the display
-  // is 400×300, leaving 4 pixels on the right and 4 on the bottom that no
+  // The grid is TERM_COLS*CHAR_W × TERM_ROWS*CHAR_H (400×296) but the display
+  // is 400×300, leaving 0 pixels on the right and 4 on the bottom that no
   // terminal cell covers.
   uint8_t *buf = display8.getBuffer();
   if (!buf) return;
-  int grid_w = TERM_COLS * CHAR_W;   // 396
+  int grid_w = TERM_COLS * CHAR_W;   // 400
   int grid_h = TERM_ROWS * CHAR_H;   // 296
   // Right gutter (columns grid_w..DISPLAY_WIDTH-1, all rows)
   if (grid_w < DISPLAY_WIDTH) {

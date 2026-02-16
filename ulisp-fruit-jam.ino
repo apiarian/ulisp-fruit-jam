@@ -94,14 +94,14 @@ const char LispLibrary[] =
          "(b2 nil) (b3 nil) "
          "(was-drawing nil)) "
     // title
-    "(set-cursor 100 4) "
+    "(set-cursor 128 4) "
     "(set-text-color 223 0) "
     "(set-text-size 2) "
     "(with-gfx (s) (princ \"Fruit Jam\" s)) "
     "(set-text-size 1) "
-    "(set-cursor 80 24) "
+    "(set-cursor 8 24) "
     "(set-text-color 150 0) "
-    "(with-gfx (s) (princ \"Mouse:draw  c/B2:color  s/B3:size  x:clear  Esc:quit\" s)) "
+    "(with-gfx (s) (princ \"Mouse:draw c/B2:color s/B3:size x:clear Esc:quit\" s)) "
     // draw separator line
     "(draw-line 0 38 399 38 64) "
     "(draw-line 0 280 399 280 64) "
@@ -3140,8 +3140,46 @@ void gfxwrite (char c) {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   if (!fruitjam_gfx_active) return;
   mouse_hide_for_draw();
-  #endif
+  // Render using unscii-8-thin font, reading cursor state from display8
+  // and color/size/wrap from our shadow variables (GFX members are protected).
+  // This replaces tft.write(c) which would use the Adafruit_GFX built-in 5×7 font.
+  uint8_t *fb = display8.getBuffer();
+  if (!fb) return;
+  int16_t cx = display8.getCursorX();
+  int16_t cy = display8.getCursorY();
+  uint8_t sz = fruitjam_text_size;
+  int charw = 8 * sz;
+  int charh = 8 * sz;
+  if (c == '\n') {
+    display8.setCursor(0, cy + charh);
+  } else if (c != '\r') {
+    if (fruitjam_text_wrap && (cx + charw > DISPLAY_WIDTH)) {
+      cx = 0;
+      cy += charh;
+      display8.setCursor(cx, cy);
+    }
+    uint8_t fg = fruitjam_text_fg;
+    uint8_t bg = fruitjam_text_bg;
+    if (fg == bg) {
+      // Transparent background (GFX convention: setTextColor with one arg)
+      if (sz == 1)
+        fruitjam_draw_char_8x8_transparent(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                            cx, cy, c, fg);
+      else
+        fruitjam_draw_char_8x8_scaled_transparent(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                                    cx, cy, c, fg, sz);
+    } else {
+      if (sz == 1)
+        fruitjam_draw_char_8x8(fb, DISPLAY_WIDTH, cx, cy, c, fg, bg);
+      else
+        fruitjam_draw_char_8x8_scaled(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                       cx, cy, c, fg, bg, sz);
+    }
+    display8.setCursor(cx + charw, cy);
+  }
+  #else
   tft.write(c);
+  #endif
 }
 #endif
 
@@ -3622,7 +3660,7 @@ void doze (int secs) {
 const int PPINDENT = 2;
 const int PPWIDTH = 80;
 #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-const int GFXPPWIDTH = 66; // 400 pixel wide screen (400/6)
+const int GFXPPWIDTH = 50; // 400 pixel wide screen (400/8, unscii-8-thin font)
 #else
 const int GFXPPWIDTH = 52; // 320 pixel wide screen
 #endif
@@ -7467,7 +7505,7 @@ object *fn_filltriangle (object *args, object *env) {
 /*
   (draw-char x y char [colour background size])
   Draws the character char with its top left corner at (x,y).
-  The character is drawn in a 5 x 7 pixel font in colour against background,
+  The character is drawn in an 8 x 8 pixel font in colour against background,
   which default to white and black respectively.
   The character can optionally be scaled by size.
 */
@@ -7488,8 +7526,24 @@ object *fn_drawchar (object *args, object *env) {
       if (more != NULL) size = checkinteger(car(more));
     }
   }
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  {
+    uint8_t *fb = display8.getBuffer();
+    if (fb) {
+      int x = checkinteger(first(args));
+      int y = checkinteger(second(args));
+      unsigned char c = checkchar(third(args));
+      if (size == 1)
+        fruitjam_draw_char_8x8(fb, DISPLAY_WIDTH, x, y, c, colour, bg);
+      else
+        fruitjam_draw_char_8x8_scaled(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                       x, y, c, colour, bg, size);
+    }
+  }
+  #else
   tft.drawChar(checkinteger(first(args)), checkinteger(second(args)), checkchar(third(args)),
     colour, bg, size);
+  #endif
   #else
   (void) args;
   #endif
@@ -7523,8 +7577,19 @@ object *fn_settextcolor (object *args, object *env) {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   FRUITJAM_CHECK_GFX();
   #endif
-  if (cdr(args) != NULL) tft.setTextColor(checkinteger(first(args)), checkinteger(second(args)));
-  else tft.setTextColor(checkinteger(first(args)));
+  if (cdr(args) != NULL) {
+    tft.setTextColor(checkinteger(first(args)), checkinteger(second(args)));
+    #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+    fruitjam_text_fg = (uint8_t)checkinteger(first(args));
+    fruitjam_text_bg = (uint8_t)checkinteger(second(args));
+    #endif
+  } else {
+    tft.setTextColor(checkinteger(first(args)));
+    #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+    fruitjam_text_fg = (uint8_t)checkinteger(first(args));
+    fruitjam_text_bg = fruitjam_text_fg;  // transparent (GFX convention: fg == bg)
+    #endif
+  }
   #else
   (void) args;
   #endif
@@ -7542,6 +7607,9 @@ object *fn_settextsize (object *args, object *env) {
   FRUITJAM_CHECK_GFX();
   #endif
   tft.setTextSize(checkinteger(first(args)));
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  fruitjam_text_size = (uint8_t)checkinteger(first(args));
+  #endif
   #else
   (void) args;
   #endif
@@ -7559,6 +7627,9 @@ object *fn_settextwrap (object *args, object *env) {
   FRUITJAM_CHECK_GFX();
   #endif
   tft.setTextWrap(first(args) != NULL);
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  fruitjam_text_wrap = (first(args) != NULL);
+  #endif
   #else
   (void) args;
   #endif
@@ -9278,7 +9349,7 @@ const char doc239[] = "(fill-triangle x0 y0 x1 y1 x2 y2 [colour])\n"
 "The outline is drawn in colour, or white if omitted.";
 const char doc240[] = "(draw-char x y char [colour background size])\n"
 "Draws the character char with its top left corner at (x,y).\n"
-"The character is drawn in a 5 x 7 pixel font in colour against background,\n"
+"The character is drawn in an 8 x 8 pixel font in colour against background,\n"
 "which default to white and black respectively.\n"
 "The character can optionally be scaled by size.";
 const char doc241[] = "(set-cursor x y)\n"
