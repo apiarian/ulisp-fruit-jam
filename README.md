@@ -136,7 +136,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - Blanks the HDMI screen to black (prevents burn-in on static text)
 - If the NeoPixels are all off, starts a gentle **rolling wave** animation — a warm white gaussian peak sweeps back and forth across the 5 LEDs
 - If the NeoPixels are already in use (set by user code), only blanks the screen
-- Any keypress instantly wakes: restores the terminal and turns off the wave
+- Any keypress or hardware button (BUTTON1/2/3) instantly wakes: restores the terminal and turns off the wave
 - Does not activate during graphics mode; exiting graphics mode resets the idle timer
 - `(set-screensaver seconds)` — configure timeout (default 300); `(set-screensaver 0)` to disable; `(set-screensaver)` returns current timeout
 

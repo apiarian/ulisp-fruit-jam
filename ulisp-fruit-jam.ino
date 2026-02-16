@@ -10300,6 +10300,14 @@ bool findsubstring (char *part, builtin_t name) {
 void testescape () {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   if (fruitjam_escape_check()) {
+    // If screensaver is active, just wake it — don't trigger escape error
+    #ifndef FRUITJAM_NO_DISPLAY
+    if (screensaver_active) {
+      screensaver_poke();
+      screensaver_wake();
+      return;
+    }
+    #endif
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
     digitalWrite(29, HIGH);  // Turn off onboard LED (active-low on Fruit Jam)
     for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
@@ -11083,7 +11091,15 @@ int gserial () {
         testescape();  // check button1 + serial escape
         #ifndef FRUITJAM_NO_DISPLAY
         screensaver_tick();  // check idle timeout, animate if active
-        if (!screensaver_active) term_blink_cursor();  // animate cursor while waiting for input
+        if (screensaver_active) {
+          // Any hardware button wakes the screensaver
+          if (digitalRead(PIN_BUTTON2) == LOW || digitalRead(PIN_BUTTON3) == LOW) {
+            screensaver_poke();
+            screensaver_wake();
+          }
+        } else {
+          term_blink_cursor();  // animate cursor while waiting for input
+        }
         #endif
         usbh_check_core1_health();  // auto-recover if core1 is stuck
       }
