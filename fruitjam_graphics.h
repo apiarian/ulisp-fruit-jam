@@ -12,6 +12,9 @@
 // ---- Graphics state ----
 static volatile bool fruitjam_gfx_active = false;
 
+// Forward declaration — defined in fruitjam_screensaver.h (included after this file)
+static void screensaver_poke();
+
 // ---- GFX text state (shadows for Adafruit_GFX protected members) ----
 // Tracked here because gfxwrite() needs them but they're protected in Adafruit_GFX.
 // Updated by the Lisp functions set-text-color, set-text-size, set-text-wrap.
@@ -168,6 +171,9 @@ static void fruitjam_exit_graphics() {
     }
   }
   term_draw_cursor();
+
+  // Reset screensaver idle timer so it doesn't activate immediately
+  screensaver_poke();
 }
 
 #endif // FRUITJAM_GRAPHICS_H

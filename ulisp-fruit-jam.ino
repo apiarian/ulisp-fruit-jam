@@ -561,6 +561,7 @@ const char LispLibrary[] =
   #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
   #include "fruitjam_neopixel.h"
+  #include "fruitjam_screensaver.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
   #if defined(gfxsupport)
@@ -8320,6 +8321,21 @@ object *fn_pixelsrainbow (object *args, object *env) {
   return nil;
 }
 
+object *fn_setscreensaver (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (args == NULL) {
+    // No args: return current timeout in seconds
+    return number(screensaver_timeout_ms / 1000);
+  }
+  int secs = checkinteger(first(args));
+  if (secs < 0) error2("timeout must be >= 0");
+  screensaver_timeout_ms = (uint32_t)secs * 1000UL;
+  screensaver_poke();  // reset timer when changing timeout
+  #endif
+  return nil;
+}
+
 // Built-in symbol names
 const char string0[] = "nil";
 const char string1[] = "t";
@@ -8777,6 +8793,7 @@ const char string295[] = "pixels-color";
 const char string296[] = "pixels-color-hsv";
 const char string297[] = "pixels-show";
 const char string298[] = "pixels-rainbow";
+const char string299[] = "set-screensaver";
 #endif
 #elif defined(CPU_RA4M1)
 const char string254[] = ":input";
@@ -9458,6 +9475,11 @@ const char doc298[] = "(pixels-rainbow [first-hue] [cycles] [sat] [val] [gammify
 "Fills the NeoPixel strip with one or more cycles of hues.\n"
 "first-hue (0-65535), cycles (default 1), sat (0-255, default 255),\n"
 "val (0-255, default 255), gammify (default t). Call (pixels-show) to update.";
+const char doc299[] = "(set-screensaver [timeout])\n"
+"Sets the screensaver idle timeout in seconds. 0 disables the screensaver.\n"
+"With no argument, returns the current timeout in seconds.\n"
+"Default is 300 (5 minutes). The screensaver blanks the screen and\n"
+"breathes the NeoPixels if they are off. Any keypress wakes.";
 #endif
 
 // Built-in symbol lookup table
@@ -9918,6 +9940,7 @@ const tbl_entry_t lookup_table[] = {
   { string296, fn_pixelscolorhsv, 0233, doc296 },
   { string297, fn_pixelsshow, 0200, doc297 },
   { string298, fn_pixelsrainbow, 0205, doc298 },
+  { string299, fn_setscreensaver, 0201, doc299 },
 #endif
 #elif defined(CPU_RA4M1)
   { string254, (fn_ptr_type)INPUT, PINMODE, NULL },
@@ -10858,9 +10881,18 @@ int gserial () {
         if (millis() - start > 1000) clrflag(NOECHO);
         testescape();  // check button1 + serial escape
         #ifndef FRUITJAM_NO_DISPLAY
-        term_blink_cursor();  // animate cursor while waiting for input
+        screensaver_tick();  // check idle timeout, animate if active
+        if (!screensaver_active) term_blink_cursor();  // animate cursor while waiting for input
         #endif
         usbh_check_core1_health();  // auto-recover if core1 is stuck
+      }
+      // Wake screensaver on any input (consumes the keypress)
+      screensaver_poke();
+      if (screensaver_wake()) {
+        // Screensaver was active — discard this keypress, go back to waiting
+        if (kbd_available()) kbd_ring_get();
+        else if (Serial.available()) Serial.read();
+        continue;
       }
       int raw = kbd_available() ? (kbd_ring_get() & 0xFF) : Serial.read();
       ch = fruitjam_line_getchar(raw);
@@ -11089,6 +11121,7 @@ void initgfx () {
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
     #endif
     fruitjam_audio_init();
+    screensaver_poke();  // initialize activity timer
   #endif
   #if defined(gfxsupport)
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)

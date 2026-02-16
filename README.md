@@ -6,7 +6,7 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 ## What's New
 
-This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, keyboard input for Lisp programs (with modifier key support), a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
+This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, keyboard input for Lisp programs (with modifier key support), a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, a screensaver with NeoPixel wave animation, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
@@ -130,6 +130,16 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **8 Lisp functions:** `pixels-begin`, `pixels-clear`, `pixels-fill`, `pixels-set-pixel-color`, `pixels-color`, `pixels-color-hsv`, `pixels-show`, `pixels-rainbow`
 
+### Screensaver (fruitjam_screensaver.h)
+
+- Activates after **5 minutes** of no keyboard or serial input at the REPL
+- Blanks the HDMI screen to black (prevents burn-in on static text)
+- If the NeoPixels are all off, starts a gentle **rolling wave** animation — a warm white gaussian peak sweeps back and forth across the 5 LEDs
+- If the NeoPixels are already in use (set by user code), only blanks the screen
+- Any keypress instantly wakes: restores the terminal and turns off the wave
+- Does not activate during graphics mode; exiting graphics mode resets the idle timer
+- `(set-screensaver seconds)` — configure timeout (default 300); `(set-screensaver 0)` to disable; `(set-screensaver)` returns current timeout
+
 ### Button Input
 
 - `(button n)` — returns `t` if button n (1–3) is pressed, `nil` otherwise
@@ -209,7 +219,7 @@ mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HS
 - **PSRAM** — 8MB / 1M objects (blocked on HSTX coexistence)
 - ~~**Better terminal font**~~ ✅ Done — replaced with [unscii-8-thin](https://github.com/viznut/unscii) 8×8 font
 - **Autorun** — boot directly into a saved program from SD card
-- **Screensaver** — idle timeout → visual animation, any keypress returns to REPL
+- ~~**Screensaver**~~ ✅ Done — blanks screen after 5 min idle, gentle NeoPixel wave animation, any keypress wakes
 
 ## Links
 
