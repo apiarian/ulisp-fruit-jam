@@ -257,14 +257,6 @@ rm ~/Arduino/libraries/Adafruit_DVI_HSTX
 mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HSTX
 ```
 
-## Future Work
-
-- **Screen editor** — a graphics-mode editor for writing Lisp code on the machine (now feasible with keyboard input)
-- ~~**PSRAM**~~ ✅ Done — 8MB / 1M objects, HSTX coexistence solved
-- ~~**Better terminal font**~~ ✅ Done — replaced with [unscii-8-thin](https://github.com/viznut/unscii) 8×8 font
-- **Autorun** — boot directly into a saved program from SD card
-- ~~**Screensaver**~~ ✅ Done — blanks screen after 5 min idle, gentle NeoPixel wave animation, any keypress wakes
-
 ## Links
 
 - [uLisp](http://www.ulisp.com/) — the upstream Lisp interpreter
