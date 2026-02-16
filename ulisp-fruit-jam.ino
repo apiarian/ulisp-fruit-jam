@@ -619,6 +619,7 @@ const char LispLibrary[] =
   #define CODESIZE 256                    /* Bytes */
   #define ULISP_WIFI
   #include <WiFiNINA.h>
+  #include "utility/spi_drv.h"
   #define LITTLEFS
   #include <LittleFS.h>
   #define FS_FILE_WRITE "w"
@@ -7224,9 +7225,6 @@ object *fn_wifiserver (object *args, object *env) {
   #if defined (ULISP_WIFI)
   (void) args, (void) env;
   server.begin();
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  fruitjam_audio_reinit_dac(); // WiFiNINA SPI init may have reset TLV320 via shared GPIO22
-  #endif
   return nil;
   #else
   (void) args, (void) env;
@@ -7256,9 +7254,6 @@ object *fn_wifisoftap (object *args, object *env) {
     }
     WiFi.beginAP(cstring(first, ssid, 33), cstring(second, pass, 65), channel);
   }
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  fruitjam_audio_reinit_dac(); // WiFiNINA SPI init may have reset TLV320 via shared GPIO22
-  #endif
   return iptostring(WiFi.localIP());
   #else
   (void) args, (void) env;
@@ -7313,9 +7308,6 @@ object *fn_wificonnect (object *args, object *env) {
     if (cddr(args) != NULL) WiFi.config(ipstring(third(args)));
     result = WiFi.begin(cstring(first(args), ssid, 33), cstring(second(args), pass, 65));
   }
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  fruitjam_audio_reinit_dac(); // WiFiNINA SPI init may have reset TLV320 via shared GPIO22
-  #endif
   if (result == WL_CONNECTED) {
     #if defined(ARDUINO_RASPBERRY_PI_PICO_W) || defined(ARDUINO_RASPBERRY_PI_PICO_2W)
       NTP.begin("pool.ntp.org");
@@ -11336,6 +11328,12 @@ void initgfx () {
     pinMode(PIN_BUTTON3, INPUT_PULLUP);
     #if defined(ULISP_WIFI)
     WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
+    // Initialize WiFiNINA SPI now so that the ESP32-C6 reset pulse (which
+    // toggles the shared GPIO22 peripheral reset, also resetting the TLV320
+    // audio codec) happens BEFORE audio init.  SpiDrv::begin() sets its
+    // internal initialized flag, so subsequent WiFi calls (wifi-connect etc.)
+    // won't re-trigger the reset.  WiFi.init() is private, so call directly.
+    SpiDrv::begin();
     #endif
     fruitjam_audio_init();
     screensaver_poke();  // initialize activity timer
