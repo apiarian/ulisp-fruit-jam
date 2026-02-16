@@ -1309,6 +1309,7 @@ char *MakeFilename (object *arg, char *buffer) {
   SDBegin - a standard call on all platforms to initialise the SD Card interface.
 */
 void SDBegin () {
+  SD.end();
   #if defined(ARDUINO_ADAFRUIT_FEATHER_RP2040_ADALOGGER)
   SD.begin(SDCARD_SS_PIN, SPI1);
   #else
