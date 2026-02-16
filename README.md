@@ -248,14 +248,7 @@ Open `ulisp-fruit-jam.ino` in the Arduino IDE with the [Adafruit RP2350 board pa
 
 ### Patched Libraries
 
-**Pico PIO USB** — The installed `Pico_PIO_USB` library (v0.7.2) has infinite busy-wait loops that can permanently lock core1. A patched copy with microsecond timeouts is symlinked at `~/Arduino/libraries/Pico_PIO_USB` → `~/code/Pico-PIO-USB-patched`. See REFERENCE.md for details.
-
-**Adafruit DVI HSTX** *(optional, no longer needed)* — A patched copy at `~/Arduino/libraries/Adafruit_DVI_HSTX` → `~/code/Adafruit-DVI-HSTX` fixes a `%` character rendering bug in `DVHSTXText` mode. Since this project now uses `DVHSTX8` instead of `DVHSTXText`, the patch has no effect and can be safely reverted:
-
-```bash
-rm ~/Arduino/libraries/Adafruit_DVI_HSTX
-mv ~/Arduino/libraries/Adafruit_DVI_HSTX.bak ~/Arduino/libraries/Adafruit_DVI_HSTX
-```
+**Pico PIO USB** — The installed `Pico_PIO_USB` library (v0.7.2) has infinite busy-wait loops that can permanently lock core1. A patched copy with microsecond timeouts is symlinked at `~/Arduino/libraries/Pico_PIO_USB` → `~/code/Pico-PIO-USB-patched`. See REFERENCE.md for details. Upstream issues [#197](https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/197) and [#192](https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/192) remain open as of v0.7.2.
 
 ## Links
 
