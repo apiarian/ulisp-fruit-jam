@@ -540,11 +540,13 @@ static char  linebuf_accum[LINEBUF_SIZE];
 static int   linebuf_accum_len = 0;
 
 // ---- Autocomplete state ----
+// Cycles through user-defined symbols (GlobalEnv) then built-in symbols.
+// Phase tracking and GlobalEnv pointer live in .ino (need object* type).
 static bool line_autocomplete_reset = true;
 static int  line_ac_buf_index = 0;
 static int  line_ac_match_len = 0;
 static int  line_ac_last_extra = 0;    // chars added by last completion
-static unsigned int line_ac_i = 0;     // scan position in symbol table
+static unsigned int line_ac_i = 0;     // scan position in built-in table
 
 // Helper: erase n characters backward on screen (no linebuf change)
 static void line_erase_back(int n) {
