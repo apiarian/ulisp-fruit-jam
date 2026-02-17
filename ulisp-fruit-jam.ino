@@ -383,6 +383,7 @@ const char LispLibrary[] =
   #include "fruitjam_escape.h"
   #include "fruitjam_terminal.h"
   #include "fruitjam_lineedit.h"
+  #include "fruitjam_mouse.h"
   #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
   #include "fruitjam_bell.h"
