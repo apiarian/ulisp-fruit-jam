@@ -393,6 +393,7 @@ const char LispLibrary[] =
   int fruitjam_gserial_impl();
   void fruitjam_gfxwrite_impl(char c);
   void fruitjam_testescape_impl();
+  void fruitjam_initgfx_impl();
   #if defined(gfxsupport)
     #define tft display8
   #endif
@@ -10095,29 +10096,9 @@ void initenv () {
   initgfx - initialises the graphics
 */
 void initgfx () {
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-    if (!fruitjam_terminal_begin()) {
-      pinMode(LED_BUILTIN, OUTPUT);
-      for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
-    }
-    fruitjam_escape_setup();
-    pinMode(PIN_BUTTON2, INPUT_PULLUP);
-    pinMode(PIN_BUTTON3, INPUT_PULLUP);
-    #if defined(ULISP_WIFI)
-    WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
-    // Initialize WiFiNINA SPI now so that the ESP32-C6 reset pulse (which
-    // toggles the shared GPIO22 peripheral reset, also resetting the TLV320
-    // audio codec) happens BEFORE audio init.  SpiDrv::begin() sets its
-    // internal initialized flag, so subsequent WiFi calls (wifi-connect etc.)
-    // won't re-trigger the reset.  WiFi.init() is private, so call directly.
-    SpiDrv::begin();
-    #endif
-    fruitjam_audio_init();
-    screensaver_poke();  // initialize activity timer
-  #endif
   #if defined(gfxsupport)
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-      fruitjam_graphics_init(); // No-op — single HSTX instance, initialized on demand
+      fruitjam_initgfx_impl();
     #elif defined(ARDUINO_PYBADGE_M4) || defined(ARDUINO_PYGAMER_M4)
       tft.initR(INITR_BLACKTAB);
       tft.setRotation(1);

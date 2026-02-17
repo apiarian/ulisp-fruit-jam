@@ -158,6 +158,34 @@ void fruitjam_testescape_impl () {
   if (Serial.available() && Serial.read() == '~') error2("escape!");
 }
 
+/*
+  fruitjam_initgfx_impl - initializes all Fruit Jam peripherals and display
+  Called from initgfx() in the main .ino.
+  Starts HDMI terminal, escape button, buttons, WiFi SPI (for shared reset
+  sequencing), audio, screensaver, and graphics subsystems.
+*/
+void fruitjam_initgfx_impl () {
+  if (!fruitjam_terminal_begin()) {
+    pinMode(LED_BUILTIN, OUTPUT);
+    for (;;) digitalWrite(LED_BUILTIN, (millis() / 500) & 1);
+  }
+  fruitjam_escape_setup();
+  pinMode(PIN_BUTTON2, INPUT_PULLUP);
+  pinMode(PIN_BUTTON3, INPUT_PULLUP);
+  #if defined(ULISP_WIFI)
+  WiFi.setPins(SPIWIFI_SS, SPIWIFI_ACK, ESP32_RESETN, ESP32_GPIO0, &SPIWIFI);
+  // Initialize WiFiNINA SPI now so that the ESP32-C6 reset pulse (which
+  // toggles the shared GPIO22 peripheral reset, also resetting the TLV320
+  // audio codec) happens BEFORE audio init.  SpiDrv::begin() sets its
+  // internal initialized flag, so subsequent WiFi calls (wifi-connect etc.)
+  // won't re-trigger the reset.  WiFi.init() is private, so call directly.
+  SpiDrv::begin();
+  #endif
+  fruitjam_audio_init();
+  screensaver_poke();  // initialize activity timer
+  fruitjam_graphics_init(); // No-op — single HSTX instance, initialized on demand
+}
+
 // Definitions — Lisp-exposed functions
 
 /*
