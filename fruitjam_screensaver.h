@@ -89,18 +89,7 @@ static void screensaver_exit() {
 
   // Restore terminal
   term_draw_suppressed = false;
-
-  // Redraw entire terminal from the saved grid
-  uint8_t *fb = display8.getBuffer();
-  if (fb) {
-    memset(fb, term_bg_color, DISPLAY_WIDTH * DISPLAY_HEIGHT);
-  }
-  for (int r = 0; r < TERM_ROWS; r++) {
-    for (int c = 0; c < TERM_COLS; c++) {
-      term_draw_cell(c, r);
-    }
-  }
-  term_draw_cursor();
+  term_restore_from_grid();
 
   // Reset activity timer
   screensaver_last_activity_ms = millis();

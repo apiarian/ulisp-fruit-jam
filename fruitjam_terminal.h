@@ -320,6 +320,22 @@ static void term_erase_cursor() {
   term_cursor_drawn = false;
 }
 
+// ---- Restore terminal from grid ----
+// Fills framebuffer with background color, redraws all cells, redraws cursor.
+// Caller must set term_draw_suppressed = false before calling.
+static void term_restore_from_grid() {
+  uint8_t *fb = display8.getBuffer();
+  if (fb) {
+    memset(fb, term_bg_color, DISPLAY_WIDTH * DISPLAY_HEIGHT);
+  }
+  for (int r = 0; r < TERM_ROWS; r++) {
+    for (int c = 0; c < TERM_COLS; c++) {
+      term_draw_cell(c, r);
+    }
+  }
+  term_draw_cursor();
+}
+
 static void term_blink_cursor() {
   if (!term_cursor_visible) return;
   unsigned long now = millis();

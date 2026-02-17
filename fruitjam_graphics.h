@@ -176,13 +176,7 @@ static void fruitjam_exit_graphics() {
   term_draw_suppressed = false;
 
   // Redraw entire terminal from the saved grid
-  display8.fillScreen(term_bg_color);
-  for (int r = 0; r < TERM_ROWS; r++) {
-    for (int c = 0; c < TERM_COLS; c++) {
-      term_draw_cell(c, r);
-    }
-  }
-  term_draw_cursor();
+  term_restore_from_grid();
 
   // Reset screensaver idle timer so it doesn't activate immediately
   screensaver_poke();
