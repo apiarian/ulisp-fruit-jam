@@ -382,6 +382,7 @@ const char LispLibrary[] =
   #define CPU_RP2350
   #include "fruitjam_escape.h"
   #include "fruitjam_terminal.h"
+  #include "fruitjam_lineedit.h"
   #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
   #include "fruitjam_bell.h"
