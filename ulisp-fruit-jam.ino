@@ -388,6 +388,8 @@ const char LispLibrary[] =
   #include "fruitjam_screensaver.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
+  // Forward declarations for impl functions in fruitjam-extensions.ino
+  void fruitjam_gserial_flush_impl();
   #if defined(gfxsupport)
     #define tft display8
   #endif
@@ -9926,12 +9928,7 @@ void gserial_flush () {
   WritePtr = 0;
   #endif
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  linebuf_len = 0;
-  linebuf_read = 0;
-  linebuf_ready = false;
-  line_autocomplete_reset = true;
-  line_paren_idx = -1;
-  hist_browse = -1;
+  fruitjam_gserial_flush_impl();
   #endif
 }
 

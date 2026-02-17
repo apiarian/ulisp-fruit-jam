@@ -7,7 +7,23 @@
   on ulisp.com). It requires #define extensions in the main .ino file.
 */
 
-// Definitions
+// Impl functions — called from dispatches in the main .ino
+// These replace large inline #if blocks with single function calls.
+
+/*
+  fruitjam_gserial_flush_impl - resets line editor state
+  Called from gserial_flush() in the main .ino.
+*/
+void fruitjam_gserial_flush_impl () {
+  linebuf_len = 0;
+  linebuf_read = 0;
+  linebuf_ready = false;
+  line_autocomplete_reset = true;
+  line_paren_idx = -1;
+  hist_browse = -1;
+}
+
+// Definitions — Lisp-exposed functions
 
 /*
   (graphics-mode)
