@@ -7284,7 +7284,7 @@ object *fn_filltriangle (object *args, object *env) {
 /*
   (draw-char x y char [colour background size])
   Draws the character char with its top left corner at (x,y).
-  The character is drawn in an 8 x 8 pixel font in colour against background,
+  The character is drawn in a 5 x 7 pixel font in colour against background,
   which default to white and black respectively.
   The character can optionally be scaled by size.
 */
@@ -8506,11 +8506,18 @@ const char doc238[] = "(draw-triangle x0 y0 x1 y1 x2 y2 [colour])\n"
 const char doc239[] = "(fill-triangle x0 y0 x1 y1 x2 y2 [colour])\n"
 "Draws a filled triangle between (x1,y1), (x2,y2), and (x3,y3).\n"
 "The outline is drawn in colour, or white if omitted.";
+#if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
 const char doc240[] = "(draw-char x y char [colour background size])\n"
 "Draws the character char with its top left corner at (x,y).\n"
-"The character is drawn in an 8 x 8 pixel font in colour against background,\n"
+"Uses the unscii-8-thin 8x8 font. Colour and background default to white and\n"
+"black respectively. The character can optionally be scaled by size.";
+#else
+const char doc240[] = "(draw-char x y char [colour background size])\n"
+"Draws the character char with its top left corner at (x,y).\n"
+"The character is drawn in a 5 x 7 pixel font in colour against background,\n"
 "which default to white and black respectively.\n"
 "The character can optionally be scaled by size.";
+#endif
 const char doc241[] = "(set-cursor x y)\n"
 "Sets the start point for text plotting to (x, y).";
 const char doc242[] = "(set-text-color colour [background])\n"
