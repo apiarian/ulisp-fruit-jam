@@ -476,17 +476,9 @@ extern volatile bool fruitjam_clocks_ready;
 
 static bool fruitjam_terminal_begin() {
   #ifndef FRUITJAM_NO_DISPLAY
-  Serial.println("[TERM] Starting DVHSTX8 at 512x384...");
-  Serial.flush();
-
   if (!display8.begin()) {
-    Serial.println("[TERM] display8.begin() FAILED");
-    Serial.flush();
     return false;
   }
-
-  Serial.println("[TERM] Display started OK");
-  Serial.flush();
 
   // Fix palette index 255 — DVHSTX8::begin() loop is i < 255, skips it
   display8.setColor(255, 255, 255, 255);  // white

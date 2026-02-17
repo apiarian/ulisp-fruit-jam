@@ -158,9 +158,7 @@ static uint32_t audio_hp_last_check_ms = 0; // polling interval timestamp
 static void audio_i2c_write_reg(uint8_t reg, uint8_t val) {
     uint8_t buf[2] = { reg, val };
     int res = i2c_write_timeout_us(AUDIO_I2C_PORT, AUDIO_I2C_ADDR, buf, 2, false, 1000);
-    if (res != 2) {
-        Serial.printf("audio: I2C write failed reg=0x%02x val=0x%02x res=%d\n", reg, val, res);
-    }
+    (void)res;
 }
 
 static uint8_t audio_i2c_read_reg(uint8_t reg) {
@@ -214,11 +212,9 @@ static void audio_apply_output_routing(void) {
             if (audio_hp_inserted) {
                 audio_speaker_mute();
                 audio_headphone_unmute();
-                Serial.println("audio: headphone detected → speaker muted");
             } else {
                 audio_headphone_unmute(); // always keep HP enabled (no harm if unplugged)
                 audio_speaker_unmute();
-                Serial.println("audio: headphone removed → speaker unmuted");
             }
             break;
         case AUDIO_OUTPUT_SPEAKER:
@@ -402,7 +398,6 @@ static void audio_tlv320_init(void) {
     audio_i2c_set_page(0);
 
     sleep_ms(100);
-    Serial.println("audio: TLV320 init complete");
 }
 
 // ---- PIO I2S init ----
@@ -447,9 +442,6 @@ static void audio_i2s_init(void) {
     // Start SM
     pio_sm_set_enabled(audio_pio, audio_sm, true);
 
-    Serial.printf("audio: PIO 0 SM%d, I2S at %d Hz (div=%lu.%lu)\n",
-                  audio_sm, AUDIO_SAMPLE_RATE,
-                  (unsigned long)(divider >> 8), (unsigned long)(divider & 0xFF));
 }
 
 // ---- DMA ----
@@ -474,8 +466,6 @@ static void audio_dma_init(void) {
     // return 3 (PIO USB hasn't started yet on core1), causing a conflict.
     audio_dma_chan = 4;
     dma_channel_claim(audio_dma_chan);
-    Serial.printf("audio: DMA channel %d\n", audio_dma_chan);
-
     dma_channel_config c = dma_channel_get_default_config(audio_dma_chan);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_read_increment(&c, true);
@@ -700,15 +690,12 @@ static void fruitjam_audio_silence(bool include_bell) {
 static void fruitjam_audio_init(void) {
     if (audio_initialized) return;
 
-    Serial.println("audio: initializing...");
-
     // Initialize voice state
     audio_voices_init();
 
     // Allocate ring buffer
     audio_ring_buf = (uint32_t *)malloc(AUDIO_RING_SIZE * sizeof(uint32_t));
     if (!audio_ring_buf) {
-        Serial.println("audio: ring buffer alloc failed!");
         return;
     }
     memset(audio_ring_buf, 0, AUDIO_RING_SIZE * sizeof(uint32_t));
@@ -718,7 +705,6 @@ static void fruitjam_audio_init(void) {
 
     // 1. MCLK — start before DAC init so PLL has a reference
     audio_mclk_init();
-    Serial.println("audio: MCLK running at 15 MHz on GPIO25");
 
     // 2. TLV320 DAC — reset and configure
     audio_tlv320_reset();
@@ -734,15 +720,11 @@ static void fruitjam_audio_init(void) {
     // We do NOT use gpio_set_irq_enabled_with_callback here because the
     // RP2350 allows only one GPIO IRQ callback per core, and the escape
     // button (GPIO0) already registered one via attachInterrupt().
-    Serial.println("audio: headphone detect via polling");
-
     audio_initialized = true;
 
     // Apply initial output routing unconditionally (don't rely on state change detection)
     audio_hp_detect_check();
     audio_apply_output_routing();
-
-    Serial.println("audio: initialization complete");
 }
 
 // ---- Synthesis ----
