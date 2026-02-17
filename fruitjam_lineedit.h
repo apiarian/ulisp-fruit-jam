@@ -7,6 +7,9 @@
 #ifndef FRUITJAM_LINEEDIT_H
 #define FRUITJAM_LINEEDIT_H
 
+#include "fruitjam_terminal.h"
+#include "fruitjam_escape.h"
+
 // Special key codes from USB keyboard (>= 0x80)
 // Must match KEY_CODE_* defines in fruitjam_usbhost.h
 #define KEY_UP    0x80

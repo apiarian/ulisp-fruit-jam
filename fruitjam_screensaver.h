@@ -15,6 +15,10 @@
 #ifndef FRUITJAM_SCREENSAVER_H
 #define FRUITJAM_SCREENSAVER_H
 
+#include "fruitjam_terminal.h"
+#include "fruitjam_mouse.h"
+#include "fruitjam_neopixel.h"
+
 // ---- Configuration ----
 #define SCREENSAVER_DEFAULT_TIMEOUT_MS  (5UL * 60 * 1000)  // 5 minutes
 #define SCREENSAVER_WAVE_PERIOD_MS      4000                // time for one full sweep (left→right or right→left)

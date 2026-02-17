@@ -34,6 +34,7 @@
 #include "hardware/sync.h"
 #include "hardware/structs/iobank0.h"
 #include "hardware/structs/sio.h"
+#include "fruitjam_mouse.h"
 
 // ---- Synchronization: core1 waits for display init (clock reconfiguration) ----
 volatile bool fruitjam_clocks_ready = false;

@@ -5,11 +5,12 @@
 // FruitJamDisplay pre-draw/peek-pixel system.
 //
 // Depends on: fruitjam_terminal.h (display8, DISPLAY_WIDTH/HEIGHT, hooks)
-// Must be included before: fruitjam_graphics.h (mode switch calls mouse_erase_cursor)
-//                          fruitjam_usbhost.h (writes mouse_x/y/buttons)
+// Included by: fruitjam_graphics.h, fruitjam_usbhost.h, fruitjam_screensaver.h
 
 #ifndef FRUITJAM_MOUSE_H
 #define FRUITJAM_MOUSE_H
+
+#include "fruitjam_terminal.h"
 
 // ---- Mouse state (shared between cores) ----
 // Updated by core1 (USB host), read by core0 (Lisp API).

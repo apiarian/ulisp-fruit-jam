@@ -6,12 +6,13 @@
 // "Text mode" redraws the terminal grid from the saved character data.
 // No HSTX reinitialization, no PLL changes, no DMA teardown. Rock solid.
 //
-// Mouse cursor rendering is in fruitjam_mouse.h (included before this file).
+// Mouse cursor rendering is in fruitjam_mouse.h.
 
 #ifndef FRUITJAM_GRAPHICS_H
 #define FRUITJAM_GRAPHICS_H
 
-// fruitjam_gfx_active is defined in fruitjam_mouse.h (included before this file)
+#include "fruitjam_terminal.h"
+#include "fruitjam_mouse.h"
 
 // Forward declaration — defined in fruitjam_screensaver.h (included after this file)
 static void screensaver_poke();
