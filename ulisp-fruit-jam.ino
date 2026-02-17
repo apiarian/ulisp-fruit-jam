@@ -7111,9 +7111,6 @@ object *sp_withgfx (object *args, object *env) {
 object *fn_drawpixel (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t colour = COLOR_WHITE;
   if (cddr(args) != NULL) colour = checkinteger(third(args));
   tft.drawPixel(checkinteger(first(args)), checkinteger(second(args)), colour);
@@ -7130,9 +7127,6 @@ object *fn_drawpixel (object *args, object *env) {
 object *fn_drawline (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[4], colour = COLOR_WHITE;
   for (int i=0; i<4; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7151,9 +7145,6 @@ object *fn_drawline (object *args, object *env) {
 object *fn_drawrect (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[4], colour = COLOR_WHITE;
   for (int i=0; i<4; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7172,9 +7163,6 @@ object *fn_drawrect (object *args, object *env) {
 object *fn_fillrect (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[4], colour = COLOR_WHITE;
   for (int i=0; i<4; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7193,9 +7181,6 @@ object *fn_fillrect (object *args, object *env) {
 object *fn_drawcircle (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[3], colour = COLOR_WHITE;
   for (int i=0; i<3; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7214,9 +7199,6 @@ object *fn_drawcircle (object *args, object *env) {
 object *fn_fillcircle (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[3], colour = COLOR_WHITE;
   for (int i=0; i<3; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7235,9 +7217,6 @@ object *fn_fillcircle (object *args, object *env) {
 object *fn_drawroundrect (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[5], colour = COLOR_WHITE;
   for (int i=0; i<5; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7256,9 +7235,6 @@ object *fn_drawroundrect (object *args, object *env) {
 object *fn_fillroundrect (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[5], colour = COLOR_WHITE;
   for (int i=0; i<5; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7277,9 +7253,6 @@ object *fn_fillroundrect (object *args, object *env) {
 object *fn_drawtriangle (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[6], colour = COLOR_WHITE;
   for (int i=0; i<6; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7298,9 +7271,6 @@ object *fn_drawtriangle (object *args, object *env) {
 object *fn_filltriangle (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t params[6], colour = COLOR_WHITE;
   for (int i=0; i<6; i++) { params[i] = checkinteger(car(args)); args = cdr(args); }
   if (args != NULL) colour = checkinteger(car(args));
@@ -7321,9 +7291,6 @@ object *fn_filltriangle (object *args, object *env) {
 object *fn_drawchar (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t colour = COLOR_WHITE, bg = COLOR_BLACK, size = 1;
   object *more = cdr(cddr(args));
   if (more != NULL) {
@@ -7366,9 +7333,6 @@ object *fn_drawchar (object *args, object *env) {
 object *fn_setcursor (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   tft.setCursor(checkinteger(first(args)), checkinteger(second(args)));
   #else
   (void) args;
@@ -7383,9 +7347,6 @@ object *fn_setcursor (object *args, object *env) {
 object *fn_settextcolor (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   if (cdr(args) != NULL) {
     tft.setTextColor(checkinteger(first(args)), checkinteger(second(args)));
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
@@ -7412,9 +7373,6 @@ object *fn_settextcolor (object *args, object *env) {
 object *fn_settextsize (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   tft.setTextSize(checkinteger(first(args)));
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   fruitjam_text_size = (uint8_t)checkinteger(first(args));
@@ -7432,9 +7390,6 @@ object *fn_settextsize (object *args, object *env) {
 object *fn_settextwrap (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   tft.setTextWrap(first(args) != NULL);
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
   fruitjam_text_wrap = (first(args) != NULL);
@@ -7452,9 +7407,6 @@ object *fn_settextwrap (object *args, object *env) {
 object *fn_fillscreen (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   uint16_t colour = COLOR_BLACK;
   if (args != NULL) colour = checkinteger(first(args));
   tft.fillScreen(colour);
@@ -7471,9 +7423,6 @@ object *fn_fillscreen (object *args, object *env) {
 object *fn_setrotation (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   tft.setRotation(checkinteger(first(args)));
   #else
   (void) args;
@@ -7488,9 +7437,6 @@ object *fn_setrotation (object *args, object *env) {
 object *fn_invertdisplay (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
   tft.invertDisplay(first(args) != NULL);
   #else
   (void) args;
@@ -7545,9 +7491,6 @@ uint16_t readpixel (uint16_t x, uint16_t y) {
 object *fn_readpixel (object *args, object *env) {
   (void) env;
   #if defined(gfxsupport)
-  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  FRUITJAM_CHECK_GFX();
-  #endif
     int x = checkinteger(first(args)), y = checkinteger(second(args));
     #if defined(ARDUINO_WIO_TERMINAL)
     return number(tft.readPixel(x, y));

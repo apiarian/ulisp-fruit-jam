@@ -76,7 +76,6 @@ int fruitjam_gserial_impl () {
 */
 void fruitjam_gfxwrite_impl (char c) {
   if (!fruitjam_gfx_active) return;
-  mouse_hide_for_draw();
   uint8_t *fb = display8.getBuffer();
   if (!fb) return;
   int16_t cx = display8.getCursorX();

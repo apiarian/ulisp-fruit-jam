@@ -111,20 +111,6 @@ static void mouse_update_cursor() {
   mouse_draw_cursor(cx, cy);
 }
 
-// Hide cursor before a draw operation (called from FRUITJAM_CHECK_GFX)
-static void mouse_hide_for_draw() {
-  if (mouse_cursor_drawn) mouse_erase_cursor();
-}
-
-// The tft alias points to display8 (defined in fruitjam_terminal.h)
-// It's always valid since display8 is always initialized.
-// GFX drawing functions use FRUITJAM_CHECK_GFX() to gate on graphics mode.
-// The cursor is hidden before any draw call and redrawn lazily via testescape().
-#define FRUITJAM_CHECK_GFX() do { \
-  if (!fruitjam_gfx_active) error2("not in graphics mode"); \
-  mouse_hide_for_draw(); \
-} while(0)
-
 // ---- No init needed ----
 static void fruitjam_graphics_init() {
   // display8 is initialized in fruitjam_terminal_begin()
