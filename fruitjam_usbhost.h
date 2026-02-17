@@ -20,10 +20,10 @@
 //
 //   4. Core0 auto-recovery (5s heartbeat): Core1 updates a heartbeat timestamp
 //      every loop1() iteration. Core0 checks from the gserial() input wait
-//      loop. If the heartbeat stalls for 5s (core1 stuck despite library
-//      timeouts), core0 triggers emergency PIO unstick — directly cuts 5V,
-//      force-sets PIO 2 IRQ flags, force-jumps all SMs, disables PIO output
-//      driving on D+/D-. This breaks core1 out of any PIO busy-wait.
+//      loop. If the heartbeat stalls for 5s (core1 stuck in a PIO busy-wait),
+//      core0 triggers emergency PIO unstick — directly cuts 5V, force-sets
+//      PIO 2 IRQ flags, force-jumps all SMs, disables PIO output driving on
+//      D+/D-. This breaks core1 out of any PIO busy-wait.
 
 #ifndef FRUITJAM_USBHOST_H
 #define FRUITJAM_USBHOST_H

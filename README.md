@@ -246,10 +246,6 @@ Open `ulisp-fruit-jam.ino` in the Arduino IDE with the [Adafruit RP2350 board pa
 
 ⚠️ **Remove any user-installed `Adafruit_TinyUSB_Library`** from `~/Arduino/libraries/` — use only the version bundled with the board package. Version mismatches between a user-installed library and the board package can cause USB host init hangs.
 
-### Patched Libraries
-
-**Pico PIO USB** — The installed `Pico_PIO_USB` library (v0.7.2) has infinite busy-wait loops that can permanently lock core1. A patched copy with microsecond timeouts is symlinked at `~/Arduino/libraries/Pico_PIO_USB` → `~/code/Pico-PIO-USB-patched`. See REFERENCE.md for details. Upstream issues [#197](https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/197) and [#192](https://github.com/sekigon-gonnoc/Pico-PIO-USB/issues/192) remain open as of v0.7.2.
-
 ## Links
 
 - [uLisp](http://www.ulisp.com/) — the upstream Lisp interpreter
