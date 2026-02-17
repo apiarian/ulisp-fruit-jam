@@ -391,12 +391,6 @@ const char LispLibrary[] =
   #include "fruitjam_graphics.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
-  // Forward declarations for impl functions in fruitjam-extensions.ino
-  void fruitjam_gserial_flush_impl();
-  int fruitjam_gserial_impl();
-  void fruitjam_gfxwrite_impl(char c);
-  void fruitjam_testescape_impl();
-  void fruitjam_initgfx_impl();
   #if defined(gfxsupport)
     #define tft display8
   #endif
@@ -9055,6 +9049,10 @@ bool findsubstring (char *part, builtin_t name) {
   bool n = name<tablesize(0);
   return (strstr(table(n?0:1)[n?name:name-tablesize(0)].string, part) != NULL);
 }
+
+#if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+#include "fruitjam_hooks.h"
+#endif
 
 void testescape () {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)

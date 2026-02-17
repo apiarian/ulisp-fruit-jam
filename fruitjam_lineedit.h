@@ -55,9 +55,12 @@ static void line_erase_back(int n) {
   }
 }
 
-// Autocomplete: implemented in .ino (needs access to symbol table).
-// Declared here, defined after lookup_table in the .ino.
-static void line_autocomplete();
+// Autocomplete: implemented in fruitjam_autocomplete.h (needs access to
+// symbol table). Connected via function pointer — same pattern as the
+// fruitjam_pre_draw_hook / fruitjam_peek_pixel_hook in terminal.h.
+// Set by fruitjam_autocomplete.h when included from extensions.ino.
+static void (*line_autocomplete_fn)() = NULL;
+static void line_autocomplete() { if (line_autocomplete_fn) line_autocomplete_fn(); }
 
 // ---- Parenthesis highlighting ----
 // Uses the terminal's character grid and absolute cursor positioning to
@@ -441,6 +444,17 @@ static int fruitjam_line_getchar(int raw_c) {
   }
 
   return -1;
+}
+
+// ---- Flush: reset all line editor state ----
+// Called from gserial_flush() in the main .ino.
+static void fruitjam_gserial_flush_impl () {
+  linebuf_len = 0;
+  linebuf_read = 0;
+  linebuf_ready = false;
+  line_autocomplete_reset = true;
+  line_paren_idx = -1;
+  hist_browse = -1;
 }
 
 #endif // FRUITJAM_LINEEDIT_H

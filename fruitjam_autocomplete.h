@@ -3,11 +3,15 @@
 // Cycles through matching symbols on each Tab press.
 // Phase 0: user-defined symbols from GlobalEnv
 // Phase 1: built-in symbols from lookup tables
-// Called from fruitjam_line_getchar() on Tab key.
+// Called from fruitjam_line_getchar() on Tab key via function pointer.
 //
 // This file is #included from fruitjam-extensions.ino AFTER the table
 // cross-reference functions (tablesize, table) are defined, because it
 // needs them, plus object*, GlobalEnv, car/cdr, etc.
+//
+// Wires up line_autocomplete_fn (declared in fruitjam_lineedit.h) via a
+// static constructor, so that lineedit can call autocomplete without a
+// cross-file forward declaration.
 //
 // The caller is responsible for the #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
 // guard around the #include.
@@ -112,7 +116,7 @@ static bool line_ac_scan_builtins () {
   return false;
 }
 
-static void line_autocomplete () {
+static void line_autocomplete_impl () {
   if (line_autocomplete_reset) {
     line_ac_phase = 0;
     line_ac_i = 0;
@@ -175,3 +179,9 @@ static void line_autocomplete () {
     line_ac_globals_ptr = GlobalEnv;
   }
 }
+
+// Wire up the function pointer so fruitjam_lineedit.h can call autocomplete
+// without a forward declaration.
+static struct _line_ac_init {
+  _line_ac_init() { line_autocomplete_fn = line_autocomplete_impl; }
+} _line_ac_init_instance;
