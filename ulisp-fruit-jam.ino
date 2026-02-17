@@ -384,6 +384,7 @@ const char LispLibrary[] =
   #include "fruitjam_terminal.h"
   #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
+  #include "fruitjam_bell.h"
   #include "fruitjam_neopixel.h"
   #include "fruitjam_screensaver.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library

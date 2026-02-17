@@ -133,10 +133,7 @@ void fruitjam_testescape_impl () {
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
     digitalWrite(29, HIGH);  // Turn off onboard LED (active-low on Fruit Jam)
     fruitjam_audio_silence(true);
-    // Clear any pending bell state and restore bell voice for next use
-    bell_pending = false;
-    if (bell_flash_active) term_bell_unflash();
-    bell_voice_init();
+    fruitjam_bell_cancel();
     if (neopixel_initialized) {
       neopixel_clear();
       neopixel_show();
@@ -177,6 +174,7 @@ void fruitjam_initgfx_impl () {
   SpiDrv::begin();
   #endif
   fruitjam_audio_init();
+  fruitjam_bell_init();
   screensaver_poke();  // initialize activity timer
   fruitjam_graphics_init(); // Wires up pre-draw hook for mouse cursor hiding
 }
