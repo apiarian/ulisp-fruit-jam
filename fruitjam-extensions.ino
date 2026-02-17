@@ -23,6 +23,51 @@ void fruitjam_gserial_flush_impl () {
   hist_browse = -1;
 }
 
+/*
+  fruitjam_gfxwrite_impl - renders a character using unscii-8-thin font
+  Called from gfxwrite() in the main .ino.
+  Reads cursor state from display8 and color/size/wrap from shadow variables.
+  This replaces tft.write(c) which would use the Adafruit_GFX built-in 5×7 font.
+*/
+void fruitjam_gfxwrite_impl (char c) {
+  if (!fruitjam_gfx_active) return;
+  mouse_hide_for_draw();
+  uint8_t *fb = display8.getBuffer();
+  if (!fb) return;
+  int16_t cx = display8.getCursorX();
+  int16_t cy = display8.getCursorY();
+  uint8_t sz = fruitjam_text_size;
+  int charw = 8 * sz;
+  int charh = 8 * sz;
+  if (c == '\n') {
+    display8.setCursor(0, cy + charh);
+  } else if (c != '\r') {
+    if (fruitjam_text_wrap && (cx + charw > DISPLAY_WIDTH)) {
+      cx = 0;
+      cy += charh;
+      display8.setCursor(cx, cy);
+    }
+    uint8_t fg = fruitjam_text_fg;
+    uint8_t bg = fruitjam_text_bg;
+    if (fg == bg) {
+      // Transparent background (GFX convention: setTextColor with one arg)
+      if (sz == 1)
+        fruitjam_draw_char_8x8_transparent(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                            cx, cy, c, fg);
+      else
+        fruitjam_draw_char_8x8_scaled_transparent(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                                    cx, cy, c, fg, sz);
+    } else {
+      if (sz == 1)
+        fruitjam_draw_char_8x8(fb, DISPLAY_WIDTH, cx, cy, c, fg, bg);
+      else
+        fruitjam_draw_char_8x8_scaled(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                       cx, cy, c, fg, bg, sz);
+    }
+    display8.setCursor(cx + charw, cy);
+  }
+}
+
 // Definitions — Lisp-exposed functions
 
 /*
