@@ -60,30 +60,9 @@ static bool neopixel_initialized = false;
 static PIO neopixel_pio = NULL;
 static uint neopixel_sm = 0;
 
-// Forward declaration
-static void neopixel_init();
-
 // ---- Send a single 24-bit GRB value to the PIO ----
 static inline void neopixel_put_pixel(uint32_t pixel_grb) {
   pio_sm_put_blocking(neopixel_pio, neopixel_sm, pixel_grb << 8u);
-}
-
-// ---- Transmit pixel data to NeoPixels ----
-static void neopixel_show() {
-  if (!neopixel_initialized) neopixel_init();
-  if (!neopixel_pio) return;  // init failed
-
-  for (int i = 0; i < NEOPIXEL_COUNT; i++) {
-    uint32_t g = neopixel_data[i * 3 + 0];
-    uint32_t r = neopixel_data[i * 3 + 1];
-    uint32_t b = neopixel_data[i * 3 + 2];
-    uint32_t grb = (g << 16) | (r << 8) | b;
-    neopixel_put_pixel(grb);
-  }
-  // The PIO handles timing automatically. The WS2812 reset pulse (>50µs)
-  // happens naturally — by the time the next show() call comes, enough
-  // time has elapsed. For safety, add a small delay.
-  delayMicroseconds(80);
 }
 
 // ---- Initialize NeoPixel PIO ----
@@ -121,6 +100,24 @@ static void neopixel_init() {
 
   pio_sm_init(neopixel_pio, neopixel_sm, offset, &c);
   pio_sm_set_enabled(neopixel_pio, neopixel_sm, true);
+}
+
+// ---- Transmit pixel data to NeoPixels ----
+static void neopixel_show() {
+  if (!neopixel_initialized) neopixel_init();
+  if (!neopixel_pio) return;  // init failed
+
+  for (int i = 0; i < NEOPIXEL_COUNT; i++) {
+    uint32_t g = neopixel_data[i * 3 + 0];
+    uint32_t r = neopixel_data[i * 3 + 1];
+    uint32_t b = neopixel_data[i * 3 + 2];
+    uint32_t grb = (g << 16) | (r << 8) | b;
+    neopixel_put_pixel(grb);
+  }
+  // The PIO handles timing automatically. The WS2812 reset pulse (>50µs)
+  // happens naturally — by the time the next show() call comes, enough
+  // time has elapsed. For safety, add a small delay.
+  delayMicroseconds(80);
 }
 
 // ---- Color utility functions ----

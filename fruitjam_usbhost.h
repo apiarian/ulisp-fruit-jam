@@ -118,8 +118,73 @@ static inline bool kbd_available() {
   return !kbd_ring_empty();
 }
 
-// Forward declaration (defined after setup1)
-static void fruitjam_usb_emergency_reset();
+// ---- Mouse HID tracking ----
+static volatile uint8_t  usbh_mouse_dev_addr = 0;
+static volatile uint8_t  usbh_mouse_instance = 0;
+static volatile bool     usbh_mouse_mounted = false;
+static volatile bool     usbh_mouse_armed = false;
+
+// ---- Emergency PIO unstick (callable from core0 or ISR context) ----
+//
+// When core1 is locked in a PIO busy-wait (e.g., pio_usb_host_frame() waiting
+// for PIO IRQ that never fires), flag-based recovery is useless — nobody on
+// core1 reads the flags. This function directly manipulates hardware registers
+// to break the deadlock:
+//
+//   1. Cut 5V power — device will disconnect, bus goes SE0
+//   2. Force-set all PIO 2 IRQ flags — breaks `while ((irq & mask) == 0)` loops
+//   3. Force-jump all PIO 2 SMs to instruction 31 — breaks `while (*pc <= N)` loops
+//   4. Disable PIO output driving on D+/D- — so connection_check() reads actual
+//      bus state (SE0 from device off), not PIO-driven levels
+//
+// After this, the SOF timer callback will return, connection_check() will
+// detect SE0 (disconnect), and loop1() will resume. The usbh_start_reset()
+// function then handles the timed re-enable of 5V power.
+//
+// Safe to call from any core or ISR — only does GPIO writes and direct
+// hardware register writes (no malloc, no SDK calls that take locks).
+
+static void fruitjam_usb_emergency_reset() {
+  // 1. Cut 5V power immediately
+  sio_hw->gpio_clr = (1u << PIN_5V_EN);   // direct register write, no SDK call
+
+  // 2. Force-set all PIO 2 IRQ flags (bits 0-7)
+  //    This breaks any `while ((pio->irq & mask) == 0)` busy-wait
+  pio2_hw->irq_force = 0xFF;
+
+  // 3. Force all 4 PIO 2 state machines to jump to instruction 31
+  //    This breaks `while (*pc <= N)` busy-waits where N < 31
+  //    pio_sm_exec() equivalent: write the JMP 31 instruction to SMx_INSTR
+  //    JMP 31 = 0x001F (opcode 000, condition 00, address 11111)
+  for (int sm = 0; sm < 4; sm++) {
+    pio2_hw->sm[sm].instr = 0x0000 | 31;  // JMP 31
+  }
+
+  // 4. Disable PIO output driving on D+ and D- pins
+  //    Set output enable override to "force disable" so the PIO can't
+  //    drive the pins. connection_check() reads GPIO input, which will
+  //    see the actual bus state (SE0 with device powered off).
+  //    GPIO_OVERRIDE_LOW (2) = force output enable low (tri-state)
+  hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP].ctrl,
+                  2u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
+                  IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
+  hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP + 1].ctrl,  // DM = DP + 1
+                  2u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
+                  IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
+
+  // 5. Request that core1 handle the reset sequence once it's unstuck
+  usbh_resetting = true;
+  usbh_reset_start = millis();
+  usbh_mounted = false;
+  usbh_zero_len_count = 0;
+  usbh_hid_armed = false;
+  usbh_rearm_fail_since = 0;
+  usbh_power_restored = false;
+  usbh_hid_dev_addr = 0;
+  usbh_mouse_dev_addr = 0;
+  usbh_mouse_mounted = false;
+  usbh_mouse_armed = false;
+}
 
 // Called from core0's gserial() wait loop to detect core1 lockups.
 // If core1's heartbeat has stalled for USBH_HEARTBEAT_TIMEOUT_MS,
@@ -133,12 +198,6 @@ static void usbh_check_core1_health() {
     fruitjam_usb_emergency_reset();
   }
 }
-
-// ---- Mouse HID tracking ----
-static volatile uint8_t  usbh_mouse_dev_addr = 0;
-static volatile uint8_t  usbh_mouse_instance = 0;
-static volatile bool     usbh_mouse_mounted = false;
-static volatile bool     usbh_mouse_armed = false;
 
 // ---- Generic HID report descriptor parsing ----
 // Non-boot-protocol mice need report descriptor parsing to identify them.
@@ -473,68 +532,6 @@ void fruitjam_usbhost_setup1() {
 
   // Initialize manual SOF frame timer
   usbh_last_frame_us = micros();
-}
-
-// ---- Emergency PIO unstick (callable from core0 or ISR context) ----
-//
-// When core1 is locked in a PIO busy-wait (e.g., pio_usb_host_frame() waiting
-// for PIO IRQ that never fires), flag-based recovery is useless — nobody on
-// core1 reads the flags. This function directly manipulates hardware registers
-// to break the deadlock:
-//
-//   1. Cut 5V power — device will disconnect, bus goes SE0
-//   2. Force-set all PIO 2 IRQ flags — breaks `while ((irq & mask) == 0)` loops
-//   3. Force-jump all PIO 2 SMs to instruction 31 — breaks `while (*pc <= N)` loops
-//   4. Disable PIO output driving on D+/D- — so connection_check() reads actual
-//      bus state (SE0 from device off), not PIO-driven levels
-//
-// After this, the SOF timer callback will return, connection_check() will
-// detect SE0 (disconnect), and loop1() will resume. The usbh_start_reset()
-// function then handles the timed re-enable of 5V power.
-//
-// Safe to call from any core or ISR — only does GPIO writes and direct
-// hardware register writes (no malloc, no SDK calls that take locks).
-
-static void fruitjam_usb_emergency_reset() {
-  // 1. Cut 5V power immediately
-  sio_hw->gpio_clr = (1u << PIN_5V_EN);   // direct register write, no SDK call
-
-  // 2. Force-set all PIO 2 IRQ flags (bits 0-7)
-  //    This breaks any `while ((pio->irq & mask) == 0)` busy-wait
-  pio2_hw->irq_force = 0xFF;
-
-  // 3. Force all 4 PIO 2 state machines to jump to instruction 31
-  //    This breaks `while (*pc <= N)` busy-waits where N < 31
-  //    pio_sm_exec() equivalent: write the JMP 31 instruction to SMx_INSTR
-  //    JMP 31 = 0x001F (opcode 000, condition 00, address 11111)
-  for (int sm = 0; sm < 4; sm++) {
-    pio2_hw->sm[sm].instr = 0x0000 | 31;  // JMP 31
-  }
-
-  // 4. Disable PIO output driving on D+ and D- pins
-  //    Set output enable override to "force disable" so the PIO can't
-  //    drive the pins. connection_check() reads GPIO input, which will
-  //    see the actual bus state (SE0 with device powered off).
-  //    GPIO_OVERRIDE_LOW (2) = force output enable low (tri-state)
-  hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP].ctrl,
-                  2u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
-                  IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
-  hw_write_masked(&iobank0_hw->io[PIN_USB_HOST_DP + 1].ctrl,  // DM = DP + 1
-                  2u << IO_BANK0_GPIO0_CTRL_OEOVER_LSB,
-                  IO_BANK0_GPIO0_CTRL_OEOVER_BITS);
-
-  // 5. Request that core1 handle the reset sequence once it's unstuck
-  usbh_resetting = true;
-  usbh_reset_start = millis();
-  usbh_mounted = false;
-  usbh_zero_len_count = 0;
-  usbh_hid_armed = false;
-  usbh_rearm_fail_since = 0;
-  usbh_power_restored = false;
-  usbh_hid_dev_addr = 0;
-  usbh_mouse_dev_addr = 0;
-  usbh_mouse_mounted = false;
-  usbh_mouse_armed = false;
 }
 
 // Power-cycle the USB 5V rail to force a full re-enumeration.

@@ -14,9 +14,6 @@
 #include "fruitjam_terminal.h"
 #include "fruitjam_mouse.h"
 
-// Forward declaration — defined in fruitjam_screensaver.h (included after this file)
-static void screensaver_poke();
-
 // ---- GFX text state (shadows for Adafruit_GFX protected members) ----
 // Tracked here because gfxwrite() needs them but they're protected in Adafruit_GFX.
 // Updated by the Lisp functions set-text-color, set-text-size, set-text-wrap.

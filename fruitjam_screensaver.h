@@ -99,8 +99,14 @@ static void screensaver_exit() {
   screensaver_last_activity_ms = millis();
 }
 
-// Forward declaration (screensaver_wake defined below, needed by tick)
-static bool screensaver_wake();
+// ---- Wake on input: returns true if screensaver was active (keypress consumed) ----
+static bool screensaver_wake() {
+  if (screensaver_active) {
+    screensaver_exit();
+    return true;
+  }
+  return false;
+}
 
 // ---- Tick: call from the idle loop ----
 static void screensaver_tick() {
@@ -156,15 +162,6 @@ static void screensaver_tick() {
   if (now - screensaver_last_activity_ms >= screensaver_timeout_ms) {
     screensaver_enter();
   }
-}
-
-// ---- Wake on input: returns true if screensaver was active (keypress consumed) ----
-static bool screensaver_wake() {
-  if (screensaver_active) {
-    screensaver_exit();
-    return true;
-  }
-  return false;
 }
 
 #endif // FRUITJAM_SCREENSAVER_H

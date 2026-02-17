@@ -384,11 +384,11 @@ const char LispLibrary[] =
   #include "fruitjam_terminal.h"
   #include "fruitjam_lineedit.h"
   #include "fruitjam_mouse.h"
-  #include "fruitjam_graphics.h"
   #include "fruitjam_audio.h"
   #include "fruitjam_bell.h"
   #include "fruitjam_neopixel.h"
   #include "fruitjam_screensaver.h"
+  #include "fruitjam_graphics.h"
   #include <pio_usb.h>          // force Arduino to discover Pico_PIO_USB library
   #include "fruitjam_usbhost.h"
   // Forward declarations for impl functions in fruitjam-extensions.ino
