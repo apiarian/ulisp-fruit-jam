@@ -390,6 +390,7 @@ const char LispLibrary[] =
   #include "fruitjam_usbhost.h"
   // Forward declarations for impl functions in fruitjam-extensions.ino
   void fruitjam_gserial_flush_impl();
+  int fruitjam_gserial_impl();
   void fruitjam_gfxwrite_impl(char c);
   #if defined(gfxsupport)
     #define tft display8
@@ -9907,44 +9908,10 @@ int gserial () {
     WritePtr = 0;
     return '\n';
   #else
-    unsigned long start = millis();
     #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-    // Line-buffered input: accumulate chars, handle backspace, submit on Enter
-    for (;;) {
-      // Try to drain a completed line first
-      int ch = fruitjam_line_getchar(-1);
-      if (ch >= 0) return (char)ch;
-      // Wait for raw input from keyboard or serial
-      while (!kbd_available() && !Serial.available()) {
-        if (millis() - start > 1000) clrflag(NOECHO);
-        testescape();  // check button1 + serial escape
-        #ifndef FRUITJAM_NO_DISPLAY
-        screensaver_tick();  // check idle timeout, animate if active
-        if (screensaver_active) {
-          // Any hardware button wakes the screensaver
-          if (digitalRead(PIN_BUTTON2) == LOW || digitalRead(PIN_BUTTON3) == LOW) {
-            screensaver_poke();
-            screensaver_wake();
-          }
-        } else {
-          term_blink_cursor();  // animate cursor while waiting for input
-        }
-        #endif
-        usbh_check_core1_health();  // auto-recover if core1 is stuck
-      }
-      // Wake screensaver on any input (consumes the keypress)
-      screensaver_poke();
-      if (screensaver_wake()) {
-        // Screensaver was active — discard this keypress, go back to waiting
-        if (kbd_available()) kbd_ring_get();
-        else if (Serial.available()) Serial.read();
-        continue;
-      }
-      int raw = kbd_available() ? (kbd_ring_get() & 0xFF) : Serial.read();
-      ch = fruitjam_line_getchar(raw);
-      if (ch >= 0) return (char)ch;
-    }
+    return fruitjam_gserial_impl();
     #else
+    unsigned long start = millis();
     while (!Serial.available()) if (millis() - start > 1000) clrflag(NOECHO);
     char c = Serial.read();
     if (c != '\n' && !tstflag(NOECHO)) pserial(c);
