@@ -26,13 +26,53 @@
 
 #ifndef FRUITJAM_NO_DISPLAY
 
-// ---- Display object — DVHSTX8 at 512×384 ----
+// ---- Pre-draw hook for mouse cursor hiding ----
+// Called by FruitJamDisplay before any framebuffer write.
+// Set by fruitjam_graphics.h to erase the mouse cursor (save-under restore).
+// Null until mouse subsystem initializes — safe during early terminal init.
+static void (*fruitjam_pre_draw_hook)() = nullptr;
+
+// ---- Display subclass with mouse-cursor-aware drawing ----
+// Overrides all GFXcanvas8 framebuffer write entry points to call the
+// pre-draw hook (which erases the mouse cursor). The hook check is a
+// single null-pointer test + a bool check per call — after the first
+// erase, mouse_cursor_drawn is false, making subsequent calls trivial.
+// This eliminates mouse artifacts without any changes to the uLisp core.
+class FruitJamDisplay : public DVHSTX8 {
+public:
+  FruitJamDisplay(DVHSTXPinout pinout, DVHSTXResolution res,
+                  bool double_buffered = false)
+      : DVHSTX8(pinout, res, double_buffered) {}
+
+  void startWrite() override {
+    if (fruitjam_pre_draw_hook) fruitjam_pre_draw_hook();
+    DVHSTX8::startWrite();
+  }
+  void drawPixel(int16_t x, int16_t y, uint16_t color) override {
+    if (fruitjam_pre_draw_hook) fruitjam_pre_draw_hook();
+    DVHSTX8::drawPixel(x, y, color);
+  }
+  void fillScreen(uint16_t color) override {
+    if (fruitjam_pre_draw_hook) fruitjam_pre_draw_hook();
+    DVHSTX8::fillScreen(color);
+  }
+  void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color) override {
+    if (fruitjam_pre_draw_hook) fruitjam_pre_draw_hook();
+    DVHSTX8::drawFastVLine(x, y, h, color);
+  }
+  void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) override {
+    if (fruitjam_pre_draw_hook) fruitjam_pre_draw_hook();
+    DVHSTX8::drawFastHLine(x, y, w, color);
+  }
+};
+
+// ---- Display object — FruitJamDisplay at 512×384 ----
 // Third arg = double_buffered (false = single-buffered).
 // Note: GFXcanvas8 buffer allocation is always suppressed by a hardcoded
 // `false` inside the DVHSTX8 constructor — the actual framebuffer is
 // malloc'd by the HSTX driver in begin().
 static DVHSTXPinout fruitjamPinConfig = ADAFRUIT_FRUIT_JAM_CFG;
-static DVHSTX8 display8(fruitjamPinConfig, DVHSTX_RESOLUTION_512x384, false);
+static FruitJamDisplay display8(fruitjamPinConfig, DVHSTX_RESOLUTION_512x384, false);
 
 // ---- Palette color indices for terminal ----
 // DVHSTX8 uses a 2-3-2 RGB palette by default.

@@ -111,9 +111,17 @@ static void mouse_update_cursor() {
   mouse_draw_cursor(cx, cy);
 }
 
-// ---- No init needed ----
+// Hide cursor before a draw operation (called via fruitjam_pre_draw_hook)
+// After the first erase, mouse_cursor_drawn is false, so subsequent calls
+// during the same draw batch are just a single bool check.
+static void mouse_hide_for_draw() {
+  if (mouse_cursor_drawn) mouse_erase_cursor();
+}
+
+// ---- Init: wire up pre-draw hook ----
 static void fruitjam_graphics_init() {
   // display8 is initialized in fruitjam_terminal_begin()
+  fruitjam_pre_draw_hook = mouse_hide_for_draw;
 }
 
 // ---- Enter graphics mode ----

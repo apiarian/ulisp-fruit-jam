@@ -76,6 +76,7 @@ int fruitjam_gserial_impl () {
 */
 void fruitjam_gfxwrite_impl (char c) {
   if (!fruitjam_gfx_active) return;
+  mouse_hide_for_draw();
   uint8_t *fb = display8.getBuffer();
   if (!fb) return;
   int16_t cx = display8.getCursorX();
@@ -182,7 +183,7 @@ void fruitjam_initgfx_impl () {
   #endif
   fruitjam_audio_init();
   screensaver_poke();  // initialize activity timer
-  fruitjam_graphics_init(); // No-op — single HSTX instance, initialized on demand
+  fruitjam_graphics_init(); // Wires up pre-draw hook for mouse cursor hiding
 }
 
 /*
@@ -204,6 +205,7 @@ object *fn_drawchar (object *args, object *env) {
       if (more != NULL) size = checkinteger(car(more));
     }
   }
+  mouse_hide_for_draw();
   uint8_t *fb = display8.getBuffer();
   if (fb) {
     int x = checkinteger(first(args));
