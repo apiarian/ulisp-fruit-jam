@@ -392,6 +392,7 @@ const char LispLibrary[] =
   void fruitjam_gserial_flush_impl();
   int fruitjam_gserial_impl();
   void fruitjam_gfxwrite_impl(char c);
+  void fruitjam_testescape_impl();
   #if defined(gfxsupport)
     #define tft display8
   #endif
@@ -9134,41 +9135,13 @@ bool findsubstring (char *part, builtin_t name) {
 
 void testescape () {
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  if (fruitjam_escape_check()) {
-    // If screensaver is active, just wake it — don't trigger escape error
-    #ifndef FRUITJAM_NO_DISPLAY
-    if (screensaver_active) {
-      screensaver_poke();
-      screensaver_wake();
-      return;
-    }
-    #endif
-    if (fruitjam_gfx_active) fruitjam_exit_graphics();
-    digitalWrite(29, HIGH);  // Turn off onboard LED (active-low on Fruit Jam)
-    for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
-      audio_voices[i].volume = 0;
-      audio_voices[i].phase_inc = 0;
-      audio_voices[i].env.stage = ADSR_OFF;
-      audio_voices[i].release_at_ms = 0;
-    }
-    // Clear any pending bell state and restore bell voice for next use
-    bell_pending = false;
-    if (bell_flash_active) term_bell_unflash();
-    bell_voice_init();
-    if (neopixel_initialized) {
-      neopixel_clear();
-      neopixel_show();
-    }
-    error2("escape!");
-  }
-  mouse_update_cursor();
-  fruitjam_audio_fill();
-  fruitjam_bell_tick();
-  #endif
+  fruitjam_testescape_impl();
+  #else
   static unsigned long n;
   if (millis()-n < 500) return;
   n = millis();
   if (Serial.available() && Serial.read() == '~') error2("escape!");
+  #endif
 }
 
 /*
