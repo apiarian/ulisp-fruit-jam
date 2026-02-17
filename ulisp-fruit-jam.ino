@@ -1853,7 +1853,7 @@ object *negate (object *arg) {
 
 /*
   multiply_floats - used by fn_multiply
-  Converts the numbers in args to floats, adds them to fresult, and returns the result as a Lisp float.
+  Converts the numbers in args to floats, multiplies them with fresult, and returns the result as a Lisp float.
 */
 object *multiply_floats (object *args, float fresult) {
   while (args != NULL) {
@@ -3971,7 +3971,7 @@ object *sp_dotimes (object *args, object *env) {
 
 /*
   (do ((var [init [step]])*) (end-test result*) form*)
-  Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step sequentially.
+  Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step in parallel.
   The forms are executed until end-test is true. It returns result.
 */
 object *sp_do (object *args, object *env) {
@@ -3980,7 +3980,7 @@ object *sp_do (object *args, object *env) {
 
 /*
   (do* ((var [init [step]])*) (end-test result*) form*)
-  Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step in parallel.
+  Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step sequentially.
   The forms are executed until end-test is true. It returns result.
 */
 object *sp_dostar (object *args, object *env) {
@@ -4605,8 +4605,9 @@ object *fn_eq (object *args, object *env) {
 
 /*
   (equal item item)
-  Tests whether the two arguments are the same symbol, same character, equal numbers,
-  or point to the same cons, and returns t or nil as appropriate.
+  Tests whether the two arguments are equal. Unlike eq, equal compares strings by
+  content and lists recursively by structure. For symbols, characters, and numbers
+  it behaves the same as eq.
 */
 object *fn_equal (object *args, object *env) {
   (void) env;
@@ -4678,7 +4679,7 @@ object *fn_caaar (object *args, object *env) {
 
 /*
   (caadr list)
-  Equivalent to (car (car (cdar list))).
+  Equivalent to (car (car (cdr list))).
 */
 object *fn_caadr (object *args, object *env) {
   (void) env;
@@ -4705,7 +4706,7 @@ object *fn_caddr (object *args, object *env) {
 
 /*
   (cdaar list)
-  Equivalent to (cdar (car (car list))).
+  Equivalent to (cdr (car (car list))).
 */
 object *fn_cdaar (object *args, object *env) {
   (void) env;
@@ -6437,7 +6438,7 @@ object *fn_analogwrite (object *args, object *env) {
 }
 
 /*
-  (analogwrite pin value)
+  (analogwriteresolution bits)
   Sets the analogue write resolution.
 */
 object *fn_analogwriteresolution (object *args, object *env) {
@@ -7048,7 +7049,7 @@ object *fn_wificonnect (object *args, object *env) {
 /*
   (get-time)
   Returns a list of the current date and time, or nil if the time isn't available, as:
-  (year, month (1-12), day (1-31), hour (0-32), minute (0-59), second (0-60), weekday (1-7), yearday (1-366)).
+  (year, month (1-12), day (1-31), hour (0-23), minute (0-59), second (0-59), weekday (1-7), yearday (1-366)).
 */
 object *fn_gettime (object *args, object *env) {
   #if defined (ULISP_WIFI)
@@ -8039,10 +8040,10 @@ const char doc47[] = "(dotimes (var number [result]) form*)\n"
 "Executes the forms number times, with the local variable var set to each integer from 0 to number-1 in turn.\n"
 "It then returns result, or nil if result is omitted.";
 const char doc48[] = "(do ((var [init [step]])*) (end-test result*) form*)\n"
-"Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step sequentially.\n"
+"Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step in parallel.\n"
 "The forms are executed until end-test is true. It returns result.";
 const char doc49[] = "(do* ((var [init [step]])*) (end-test result*) form*)\n"
-"Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step in parallel.\n"
+"Accepts an arbitrary number of iteration vars, which are initialised to init and stepped by step sequentially.\n"
 "The forms are executed until end-test is true. It returns result.";
 const char doc50[] = "(trace [function]*)\n"
 "Turns on tracing of up to TRACEMAX user-defined functions,\n"
@@ -8116,8 +8117,9 @@ const char doc76[] = "(set symbol value [symbol value]*)\n"
 const char doc77[] = "(streamp item)\n"
 "Returns t if its argument is a stream.";
 const char doc78[] = "(equal item item)\n"
-"Tests whether the two arguments are the same symbol, same character, equal numbers,\n"
-"or point to the same cons, and returns t or nil as appropriate.";
+"Tests whether the two arguments are equal. Unlike eq, equal compares strings by\n"
+"content and lists recursively by structure. For symbols, characters, and numbers\n"
+"it behaves the same as eq.";
 const char doc79[] = "(caar list)";
 const char doc80[] = "(cadr list)";
 const char doc81[] = "(second list)\n"
@@ -8129,7 +8131,7 @@ const char doc83[] = "(cddr list)\n"
 const char doc84[] = "(caaar list)\n"
 "Equivalent to (car (car (car list))).";
 const char doc85[] = "(caadr list)\n"
-"Equivalent to (car (car (cdar list))).";
+"Equivalent to (car (car (cdr list))).";
 const char doc86[] = "(cadar list)\n"
 "Equivalent to (car (cdr (car list))).";
 const char doc87[] = "(caddr list)\n"
@@ -8137,7 +8139,7 @@ const char doc87[] = "(caddr list)\n"
 const char doc88[] = "(third list)\n"
 "Returns the third item in a list. Equivalent to caddr.";
 const char doc89[] = "(cdaar list)\n"
-"Equivalent to (cdar (car (car list))).";
+"Equivalent to (cdr (car (car list))).";
 const char doc90[] = "(cdadr list)\n"
 "Equivalent to (cdr (car (cdr list))).";
 const char doc91[] = "(cddar list)\n"
@@ -8411,7 +8413,7 @@ const char doc201[] = "(analogreadresolution bits)\n"
 "The default resolution on all platforms is 10 bits.";
 const char doc202[] = "(analogwrite pin value)\n"
 "Writes the value to the specified Arduino pin number.";
-const char doc203[] = "(analogwrite pin value)\n"
+const char doc203[] = "(analogwriteresolution bits)\n"
 "Sets the analogue write resolution.";
 const char doc204[] = "(delay number)\n"
 "Delays for a specified number of milliseconds.";
@@ -8471,7 +8473,7 @@ const char doc227[] = "(wifi-connect [ssid pass])\n"
 "Connects to the Wi-Fi network ssid using password pass. It returns the IP address as a string.";
 const char doc228[] = "(get-time)\n"
 "Returns a list of the current date and time, or nil if the time isn't available, as:\n"
-"(year, month (1-12), day (1-31), hour (0-32), minute (0-59), second (0-60), weekday (1-7), yearday (1-366)).";
+"(year, month (1-12), day (1-31), hour (0-23), minute (0-59), second (0-59), weekday (1-7), yearday (1-366)).";
 const char doc229[] = "(with-gfx (str) form*)\n"
 "Evaluates the forms with str bound to an gfx-stream so you can print text\n"
 "to the graphics display using the standard uLisp print commands.";
