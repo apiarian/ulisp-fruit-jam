@@ -185,6 +185,96 @@ void fruitjam_initgfx_impl () {
   fruitjam_graphics_init(); // No-op — single HSTX instance, initialized on demand
 }
 
+/*
+  (draw-char x y char [colour background size])
+  Draws the character char with its top left corner at (x,y).
+  Uses the unscii-8-thin 8x8 font. Colour and background default to white and
+  black respectively. The character can optionally be scaled by size.
+*/
+object *fn_drawchar (object *args, object *env) {
+  (void) env;
+  uint16_t colour = COLOR_WHITE, bg = COLOR_BLACK, size = 1;
+  object *more = cdr(cddr(args));
+  if (more != NULL) {
+    colour = checkinteger(car(more));
+    more = cdr(more);
+    if (more != NULL) {
+      bg = checkinteger(car(more));
+      more = cdr(more);
+      if (more != NULL) size = checkinteger(car(more));
+    }
+  }
+  uint8_t *fb = display8.getBuffer();
+  if (fb) {
+    int x = checkinteger(first(args));
+    int y = checkinteger(second(args));
+    unsigned char c = checkchar(third(args));
+    if (size == 1)
+      fruitjam_draw_char_8x8(fb, DISPLAY_WIDTH, x, y, c, colour, bg);
+    else
+      fruitjam_draw_char_8x8_scaled(fb, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                                     x, y, c, colour, bg, size);
+  }
+  return nil;
+}
+
+/*
+  (set-text-color colour [background])
+  Sets the text colour for text plotted using (with-gfx ...).
+  Also updates shadow variables used by the custom gfxwrite renderer.
+*/
+object *fn_settextcolor (object *args, object *env) {
+  (void) env;
+  if (cdr(args) != NULL) {
+    tft.setTextColor(checkinteger(first(args)), checkinteger(second(args)));
+    fruitjam_text_fg = (uint8_t)checkinteger(first(args));
+    fruitjam_text_bg = (uint8_t)checkinteger(second(args));
+  } else {
+    tft.setTextColor(checkinteger(first(args)));
+    fruitjam_text_fg = (uint8_t)checkinteger(first(args));
+    fruitjam_text_bg = fruitjam_text_fg;  // transparent (GFX convention: fg == bg)
+  }
+  return nil;
+}
+
+/*
+  (set-text-size scale)
+  Scales text by the specified size, default 1.
+  Also updates shadow variable used by the custom gfxwrite renderer.
+*/
+object *fn_settextsize (object *args, object *env) {
+  (void) env;
+  tft.setTextSize(checkinteger(first(args)));
+  fruitjam_text_size = (uint8_t)checkinteger(first(args));
+  return nil;
+}
+
+/*
+  (set-text-wrap boolean)
+  Specifies whether text wraps at the right-hand edge of the display; the default is t.
+  Also updates shadow variable used by the custom gfxwrite renderer.
+*/
+object *fn_settextwrap (object *args, object *env) {
+  (void) env;
+  tft.setTextWrap(first(args) != NULL);
+  fruitjam_text_wrap = (first(args) != NULL);
+  return nil;
+}
+
+/*
+  (display-size)
+  In graphics mode, returns (width height) in pixels.
+  In text mode, returns (columns rows) of the terminal.
+*/
+object *fn_displaysize (object *args, object *env) {
+  (void) args, (void) env;
+  if (fruitjam_gfx_active) {
+    return cons(number(tft.width()), cons(number(tft.height()), NULL));
+  } else {
+    return cons(number(TERM_COLS), cons(number(TERM_ROWS), NULL));
+  }
+}
+
 // Definitions — Lisp-exposed functions
 
 /*
