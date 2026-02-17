@@ -79,7 +79,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - `audio-note` auto-triggers envelope, `audio-release` fades to silence
 - **Self-releasing notes:** `(audio-note voice note duration)` — optional duration in ms schedules auto-release from note start, enabling fire-and-forget sound effects without blocking
 - **Headphone detection:** auto-switches between speaker and 3.5mm headphone jack
-- `(audio-output mode)` for manual routing: auto (default), speaker, headphone, or both
+- `(audio-output mode)` for manual routing: `:auto` (default), `:speaker`, `:headphone`, or `:both`
 - Hardware: TLV320DAC3100 I2S DAC, PIO 0 for I2S output, DMA channel 4, 22050 Hz sample rate
 
 ```lisp
@@ -105,6 +105,8 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
     (setf (aref wt i) (truncate (* 127 (sin (* 6.283 (/ i 256.0)))) 1)))
   (audio-wave 0 wt))
 
+(audio-output :speaker)                    ; force speaker output
+(audio-output :auto)                      ; restore auto-switching
 (audio-stop-all)                          ; silence everything
 ```
 

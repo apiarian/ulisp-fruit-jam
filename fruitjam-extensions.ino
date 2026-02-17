@@ -626,14 +626,21 @@ object *fn_audiorelease (object *args, object *env) {
 
 /*
   (audio-output mode)
-  Sets audio output routing. mode: 0=auto (switch on headphone detect),
-  1=speaker, 2=headphone, 3=both. Returns nil.
+  Sets audio output routing. mode can be a keyword (:auto, :speaker, :headphone, :both)
+  or an integer (0-3). Returns nil.
 */
 object *fn_audiooutput (object *args, object *env) {
   (void) env;
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  int mode = checkinteger(first(args));
-  if (mode < 0 || mode > 3) error("mode 0-3", first(args));
+  object *arg = first(args);
+  int mode;
+  if (keywordp(arg)) {
+    mode = checkkeyword(arg);
+    if (mode < 0 || mode > 3) error("invalid output keyword", arg);
+  } else {
+    mode = checkinteger(arg);
+    if (mode < 0 || mode > 3) error("mode 0-3", arg);
+  }
   audio_output_mode = (uint8_t)mode;
   audio_apply_output_routing();
   #endif
@@ -868,6 +875,12 @@ const char stringKwTriangle[] = ":triangle";
 const char stringKwSawtooth[] = ":sawtooth";
 const char stringKwNoise[] = ":noise";
 
+// Audio output routing keyword names
+const char stringKwAuto[] = ":auto";
+const char stringKwSpeaker[] = ":speaker";
+const char stringKwHeadphone[] = ":headphone";
+const char stringKwBoth[] = ":both";
+
 // Documentation strings
 const char docGraphicsMode[] = "(graphics-mode)\n"
 "Switches the display to graphics mode (512x384, 256 colours). Returns t on success.";
@@ -911,7 +924,8 @@ const char docAudioTrigger[] = "(audio-trigger voice)\n"
 const char docAudioRelease[] = "(audio-release voice)\n"
 "Starts the release phase on voice (0-4), fading to silence.";
 const char docAudioOutput[] = "(audio-output mode)\n"
-"Sets output routing: 0=auto (headphone detect), 1=speaker, 2=headphone, 3=both.";
+"Sets output routing: :auto (headphone detect), :speaker, :headphone, :both,\n"
+"or an integer 0-3.";
 const char docButton[] = "(button n)\n"
 "Returns t if button n (1-3) is currently pressed, or nil if not.\n"
 "Note: button 1 is the escape button. Its interrupt fires on press,\n"
@@ -1001,6 +1015,10 @@ const tbl_entry_t lookup_table2[] = {
   { stringKwTriangle, (fn_ptr_type)AUDIO_WAVE_TRIANGLE, 0, NULL },
   { stringKwSawtooth, (fn_ptr_type)AUDIO_WAVE_SAWTOOTH, 0, NULL },
   { stringKwNoise, (fn_ptr_type)AUDIO_WAVE_NOISE, 0, NULL },
+  { stringKwAuto, (fn_ptr_type)AUDIO_OUTPUT_AUTO, 0, NULL },
+  { stringKwSpeaker, (fn_ptr_type)AUDIO_OUTPUT_SPEAKER, 0, NULL },
+  { stringKwHeadphone, (fn_ptr_type)AUDIO_OUTPUT_HEADPHONE, 0, NULL },
+  { stringKwBoth, (fn_ptr_type)AUDIO_OUTPUT_BOTH, 0, NULL },
 };
 
 // Table cross-reference functions - do not edit below this line
