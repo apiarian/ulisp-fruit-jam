@@ -95,9 +95,18 @@ static void screensaver_exit() {
   screensaver_last_activity_ms = millis();
 }
 
+// Forward declaration (screensaver_wake defined below, needed by tick)
+static bool screensaver_wake();
+
 // ---- Tick: call from the idle loop ----
 static void screensaver_tick() {
   if (screensaver_active) {
+    // Any hardware button (BUTTON2/BUTTON3) wakes the screensaver
+    if (digitalRead(PIN_BUTTON2) == LOW || digitalRead(PIN_BUTTON3) == LOW) {
+      screensaver_poke();
+      screensaver_wake();
+      return;
+    }
     if (screensaver_owns_neopixels) {
       uint32_t now = millis();
       if (now - screensaver_last_update_ms < SCREENSAVER_UPDATE_INTERVAL_MS) return;

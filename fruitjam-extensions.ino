@@ -41,14 +41,8 @@ int fruitjam_gserial_impl () {
       if (millis() - start > 1000) clrflag(NOECHO);
       testescape();  // check button1 + serial escape
       #ifndef FRUITJAM_NO_DISPLAY
-      screensaver_tick();  // check idle timeout, animate if active
-      if (screensaver_active) {
-        // Any hardware button wakes the screensaver
-        if (digitalRead(PIN_BUTTON2) == LOW || digitalRead(PIN_BUTTON3) == LOW) {
-          screensaver_poke();
-          screensaver_wake();
-        }
-      } else {
+      screensaver_tick();  // check idle timeout, animate if active, button wake
+      if (!screensaver_active) {
         term_blink_cursor();  // animate cursor while waiting for input
       }
       #endif
