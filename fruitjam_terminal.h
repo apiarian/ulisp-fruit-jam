@@ -505,12 +505,45 @@ static bool fruitjam_terminal_begin() {
 
 // ---- Print to terminal (+ mirror to serial) ----
 
+// Filter ANSI escape sequences from serial output.
+// The HDMI terminal understands VT100 sequences, but the Arduino IDE
+// serial monitor does not, so we strip them before sending to Serial.
+enum SerialFilterState { SF_NORMAL, SF_ESC, SF_CSI };
+static SerialFilterState serial_filter_state = SF_NORMAL;
+
+static void serial_write_filtered(char c) {
+  switch (serial_filter_state) {
+    case SF_NORMAL:
+      if (c == '\033') {
+        serial_filter_state = SF_ESC;  // swallow ESC
+      } else {
+        if (c == '\n') Serial.write('\r');
+        Serial.write(c);
+      }
+      break;
+    case SF_ESC:
+      if (c == '[') {
+        serial_filter_state = SF_CSI;  // swallow '['
+      } else {
+        // ESC + single char sequences (e.g. ESC 7, ESC 8) — swallow both
+        serial_filter_state = SF_NORMAL;
+      }
+      break;
+    case SF_CSI:
+      // CSI parameters are digits, ';', '?', then a letter terminates
+      if (c >= 0x40 && c <= 0x7E) {
+        serial_filter_state = SF_NORMAL;  // final byte — swallow it
+      }
+      // else: intermediate/parameter bytes — keep swallowing
+      break;
+  }
+}
+
 static void fruitjam_pserial(char c) {
   #ifndef FRUITJAM_NO_DISPLAY
   term_putchar(c);
   #endif
-  if (c == '\n') Serial.write('\r');
-  Serial.write(c);
+  serial_write_filtered(c);
 }
 
 #endif // FRUITJAM_TERMINAL_H
