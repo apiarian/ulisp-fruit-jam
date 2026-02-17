@@ -132,12 +132,7 @@ void fruitjam_testescape_impl () {
     #endif
     if (fruitjam_gfx_active) fruitjam_exit_graphics();
     digitalWrite(29, HIGH);  // Turn off onboard LED (active-low on Fruit Jam)
-    for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
-      audio_voices[i].volume = 0;
-      audio_voices[i].phase_inc = 0;
-      audio_voices[i].env.stage = ADSR_OFF;
-      audio_voices[i].release_at_ms = 0;
-    }
+    fruitjam_audio_silence(true);
     // Clear any pending bell state and restore bell voice for next use
     bell_pending = false;
     if (bell_flash_active) term_bell_unflash();
@@ -537,14 +532,7 @@ object *fn_audiostop (object *args, object *env) {
 object *fn_audiostopall (object *args, object *env) {
   (void) args, (void) env;
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
-  for (int i = 0; i < AUDIO_NUM_VOICES; i++) {
-    audio_voices[i].volume = 0;
-    audio_voices[i].phase = 0;
-    audio_voices[i].phase_inc = 0;
-    audio_voices[i].env.stage = ADSR_OFF;
-    audio_voices[i].env.env_level = 0;
-    audio_voices[i].release_at_ms = 0;
-  }
+  fruitjam_audio_silence(false);
   #endif
   return nil;
 }

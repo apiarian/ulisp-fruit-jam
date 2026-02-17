@@ -692,6 +692,22 @@ static void bell_voice_init() {
 
 // ---- Public API ----
 
+// Silence voices: zeros volume, phase, phase_inc, envelope state, and
+// release timer. When include_bell is true, silences all AUDIO_TOTAL_VOICES
+// (including the private bell voice); when false, only the AUDIO_NUM_VOICES
+// user-accessible voices.
+static void fruitjam_audio_silence(bool include_bell) {
+    int count = include_bell ? AUDIO_TOTAL_VOICES : AUDIO_NUM_VOICES;
+    for (int i = 0; i < count; i++) {
+        audio_voices[i].volume = 0;
+        audio_voices[i].phase = 0;
+        audio_voices[i].phase_inc = 0;
+        audio_voices[i].env.stage = ADSR_OFF;
+        audio_voices[i].env.env_level = 0;
+        audio_voices[i].release_at_ms = 0;
+    }
+}
+
 // Initialize the entire audio subsystem. Call once from initgfx() after
 // display and WiFi are initialized.
 static void fruitjam_audio_init(void) {
