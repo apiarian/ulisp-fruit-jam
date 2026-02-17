@@ -8,9 +8,6 @@
 #ifndef FRUITJAM_ESCAPE_H
 #define FRUITJAM_ESCAPE_H
 
-// Forward declaration — ESCAPE flag enum value is defined in the .ino
-// We access it via setflag() macro which is also defined there
-
 static volatile bool     escape_button_pressed = false;
 static volatile uint32_t escape_button_press_time = 0;  // millis() when button went down
 
