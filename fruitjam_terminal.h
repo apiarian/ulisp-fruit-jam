@@ -32,6 +32,14 @@
 // Null until mouse subsystem initializes — safe during early terminal init.
 static void (*fruitjam_pre_draw_hook)() = nullptr;
 
+// ---- Peek-pixel hook for reading under the mouse cursor ----
+// Called by FruitJamDisplay::getPixel to read the true pixel value when the
+// mouse cursor sprite is drawn on top.  Returns true if the coordinate was
+// under the cursor (and sets *out to the saved pixel); false otherwise.
+// Coordinates are in raw (unrotated) framebuffer space.
+// Set by fruitjam_graphics.h; null until mouse subsystem initializes.
+static bool (*fruitjam_peek_pixel_hook)(int16_t x, int16_t y, uint8_t *out) = nullptr;
+
 // ---- Display subclass with mouse-cursor-aware drawing ----
 // Overrides all GFXcanvas8 framebuffer write entry points to call the
 // pre-draw hook (which erases the mouse cursor). The hook check is a
@@ -63,6 +71,29 @@ public:
   void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color) override {
     if (fruitjam_pre_draw_hook) fruitjam_pre_draw_hook();
     DVHSTX8::drawFastHLine(x, y, w, color);
+  }
+
+  // Shadow GFXcanvas8::getPixel (non-virtual) to peek under the mouse cursor.
+  // Since tft/display8 is typed as FruitJamDisplay, calls resolve here at
+  // compile time.  Applies the same rotation→raw conversion as the parent,
+  // then checks the peek hook before falling back to the framebuffer.
+  uint8_t getPixel(int16_t x, int16_t y) const {
+    // Rotation→raw coordinate conversion (same as GFXcanvas8::getPixel)
+    int16_t t;
+    switch (rotation) {
+      case 1: t = x; x = WIDTH - 1 - y; y = t; break;
+      case 2: x = WIDTH - 1 - x; y = HEIGHT - 1 - y; break;
+      case 3: t = x; x = y; y = HEIGHT - 1 - t; break;
+    }
+    // Check if this raw pixel is under the mouse cursor sprite
+    uint8_t val;
+    if (fruitjam_peek_pixel_hook && fruitjam_peek_pixel_hook(x, y, &val)) {
+      return val;
+    }
+    // Not under cursor — read framebuffer directly
+    if ((x < 0) || (y < 0) || (x >= WIDTH) || (y >= HEIGHT)) return 0;
+    uint8_t *buf = getBuffer();
+    return buf ? buf[x + y * WIDTH] : 0;
   }
 };
 

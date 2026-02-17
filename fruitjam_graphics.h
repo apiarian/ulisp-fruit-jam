@@ -118,10 +118,28 @@ static void mouse_hide_for_draw() {
   if (mouse_cursor_drawn) mouse_erase_cursor();
 }
 
-// ---- Init: wire up pre-draw hook ----
+// Peek under the mouse cursor (called via fruitjam_peek_pixel_hook)
+// If (x,y) in raw framebuffer space falls under the drawn cursor sprite,
+// returns true and sets *out to the saved pixel value from before the cursor
+// was drawn.  This lets read-pixel return the correct value without needing
+// to erase and redraw the cursor.
+static bool mouse_peek_pixel(int16_t x, int16_t y, uint8_t *out) {
+  if (!mouse_cursor_drawn) return false;
+  int16_t dx = x - mouse_save_x;
+  int16_t dy = y - mouse_save_y;
+  if (dx < 0 || dx >= 8 || dy < 0 || dy >= 8) return false;
+  int idx = dy * 8 + dx;
+  // Only intercept pixels that the sprite actually overwrote (non-transparent)
+  if (mouse_cursor_sprite[idx] == 0xFE) return false;
+  *out = mouse_save_under[idx];
+  return true;
+}
+
+// ---- Init: wire up hooks ----
 static void fruitjam_graphics_init() {
   // display8 is initialized in fruitjam_terminal_begin()
   fruitjam_pre_draw_hook = mouse_hide_for_draw;
+  fruitjam_peek_pixel_hook = mouse_peek_pixel;
 }
 
 // ---- Enter graphics mode ----
