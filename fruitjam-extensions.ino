@@ -389,8 +389,8 @@ object *fn_mousehide (object *args, object *env) {
 /*
   (audio-wave voice waveform)
   Sets the waveform for a voice (0-4).
-  waveform can be: :sine, :square, :triangle, :sawtooth, :noise, :silence,
-  or a 1D array of 256 integers (-128 to 127) for a custom wavetable.
+  waveform can be a keyword (:sine, :square, :triangle, :sawtooth, :noise, :silence),
+  an integer (0-5), or a 1D array of 256 integers (-128 to 127) for a custom wavetable.
 */
 object *fn_audiowave (object *args, object *env) {
   (void) env;
@@ -398,7 +398,12 @@ object *fn_audiowave (object *args, object *env) {
   int voice = checkinteger(first(args));
   if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
   object *wf = second(args);
-  if (integerp(wf)) {
+  if (keywordp(wf)) {
+    // Accept keyword waveforms: :sine, :square, :triangle, :sawtooth, :noise, :silence
+    int id = checkkeyword(wf);
+    if (id < 0 || id > 5) error("invalid waveform keyword", wf);
+    audio_set_builtin_waveform(voice, (uint8_t)id);
+  } else if (integerp(wf)) {
     // Accept integer waveform IDs directly: 0=silence, 1=sine, 2=square, 3=triangle, 4=sawtooth, 5=noise
     int id = wf->integer;
     if (id < 0 || id > 5) error("waveform id 0-5", wf);
@@ -417,7 +422,7 @@ object *fn_audiowave (object *args, object *env) {
     }
     v->waveform_id = AUDIO_WAVE_CUSTOM;
   } else {
-    error("expected integer (0-5) or array", wf);
+    error("expected keyword, integer (0-5), or array", wf);
   }
   #endif
   return nil;
@@ -855,6 +860,14 @@ const char stringPixelsShow[] = "pixels-show";
 const char stringPixelsRainbow[] = "pixels-rainbow";
 const char stringSetScreensaver[] = "set-screensaver";
 
+// Audio waveform keyword names
+const char stringKwSilence[] = ":silence";
+const char stringKwSine[] = ":sine";
+const char stringKwSquare[] = ":square";
+const char stringKwTriangle[] = ":triangle";
+const char stringKwSawtooth[] = ":sawtooth";
+const char stringKwNoise[] = ":noise";
+
 // Documentation strings
 const char docGraphicsMode[] = "(graphics-mode)\n"
 "Switches the display to graphics mode (512x384, 256 colours). Returns t on success.";
@@ -873,8 +886,8 @@ const char docMouseShow[] = "(mouse-show)\n"
 const char docMouseHide[] = "(mouse-hide)\n"
 "Hides the mouse cursor. Returns nil.";
 const char docAudioWave[] = "(audio-wave voice waveform)\n"
-"Sets the waveform for voice (0-4). waveform: 0=silence, 1=sine, 2=square,\n"
-"3=triangle, 4=sawtooth, 5=noise, or a 256-element array of values -128 to 127.";
+"Sets the waveform for voice (0-4). waveform: :sine, :square, :triangle,\n"
+":sawtooth, :noise, :silence, an integer 0-5, or a 256-element array (-128 to 127).";
 const char docAudioFreq[] = "(audio-freq voice frequency)\n"
 "Sets the frequency in Hz for voice (0-4). Accepts integer or float.";
 const char docAudioNote[] = "(audio-note voice midi-note [duration])\n"
@@ -982,6 +995,12 @@ const tbl_entry_t lookup_table2[] = {
   { stringPixelsShow, fn_pixelsshow, 0200, docPixelsShow },
   { stringPixelsRainbow, fn_pixelsrainbow, 0205, docPixelsRainbow },
   { stringSetScreensaver, fn_setscreensaver, 0201, docSetScreensaver },
+  { stringKwSilence, (fn_ptr_type)AUDIO_WAVE_SILENCE, 0, NULL },
+  { stringKwSine, (fn_ptr_type)AUDIO_WAVE_SINE, 0, NULL },
+  { stringKwSquare, (fn_ptr_type)AUDIO_WAVE_SQUARE, 0, NULL },
+  { stringKwTriangle, (fn_ptr_type)AUDIO_WAVE_TRIANGLE, 0, NULL },
+  { stringKwSawtooth, (fn_ptr_type)AUDIO_WAVE_SAWTOOTH, 0, NULL },
+  { stringKwNoise, (fn_ptr_type)AUDIO_WAVE_NOISE, 0, NULL },
 };
 
 // Table cross-reference functions - do not edit below this line

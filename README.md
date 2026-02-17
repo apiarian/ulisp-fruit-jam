@@ -84,16 +84,16 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 ```lisp
 ;; Play a C major chord with sine waves
-(audio-wave 0 1) (audio-wave 1 1) (audio-wave 2 1)
+(audio-wave 0 :sine) (audio-wave 1 :sine) (audio-wave 2 :sine)
 (audio-vol 0 120) (audio-vol 1 120) (audio-vol 2 120)
 (audio-note 0 60) (audio-note 1 64) (audio-note 2 67)
 
 ;; Fire-and-forget sound effect (150ms square blip, no envelope needed)
-(audio-wave 0 2) (audio-vol 0 150)
+(audio-wave 0 :square) (audio-vol 0 150)
 (audio-note 0 72 150)
 
 ;; Plucky arpeggio with envelope
-(audio-wave 0 2)                         ; square wave
+(audio-wave 0 :square)                   ; square wave
 (audio-vol 0 180)
 (audio-envelope 0 5 50 0 100)            ; quick attack, short decay, no sustain
 (dolist (n '(48 55 52 60 48 55 52 60))
