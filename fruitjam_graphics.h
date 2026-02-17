@@ -17,6 +17,9 @@
 // ---- GFX text state (shadows for Adafruit_GFX protected members) ----
 // Tracked here because gfxwrite() needs them but they're protected in Adafruit_GFX.
 // Updated by the Lisp functions set-text-color, set-text-size, set-text-wrap.
+// IMPORTANT: If you add C/C++ code that calls tft.setTextColor(), tft.setTextSize(),
+// or tft.setTextWrap() directly, you MUST also update these shadow variables to match.
+// Otherwise gfxwrite() will render with stale values.
 static uint8_t  fruitjam_text_fg = 0xFF;   // white
 static uint8_t  fruitjam_text_bg = 0xFF;   // same as fg = transparent (GFX convention)
 static uint8_t  fruitjam_text_size = 1;
