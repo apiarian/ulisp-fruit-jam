@@ -147,7 +147,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 (audio-stop-all)                          ; silence everything
 ```
 
-**Built-in demo:** `(demo)` — an interactive paint app that showcases audio (UI click/blip sound effects, startup jingle), mouse drawing, button input (color/size cycling), keyboard shortcuts (Escape to quit, c/s/x for color/size/clear), and NeoPixels (reflecting current brush color).
+**Built-in demo:** `(demo)` — an interactive paint app that showcases audio (UI click/blip sound effects, startup jingle), mouse drawing with **5 sprite-based brush shapes** (circle, square, diamond, star, spray — procedurally generated on the sprite sheet at startup, drawn via `sprite-draw` with remap for recoloring), 3 brush scales using integer sprite scaling, button input (color/size cycling), keyboard shortcuts (Escape to quit, b/c/s/x for brush/color/size/clear), and NeoPixels (reflecting current brush color).
 
 **12 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`
 
