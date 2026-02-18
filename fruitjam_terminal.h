@@ -118,29 +118,29 @@ static FruitJamDisplay display8(fruitjamPinConfig, DVHSTX_RESOLUTION_512x384, fa
 //   G: bits 5-3 (0-7 → 0,36,73,109,146,182,219,255)
 //   B: bits 1-0 (0-3 → 0,85,170,255)
 //
-// Helper to make a 2-3-2 palette index from 0-255 RGB:
-//   ((r >> 6) << 6) | ((g >> 5) << 2) | (b >> 6)
-#define PAL232(r,g,b) (((r) >> 6) << 6 | ((g) >> 5) << 2 | ((b) >> 6))
+// Helper to make a 3-3-2 palette index from 0-255 RGB:
+//   ((r >> 5) << 5) | ((g >> 5) << 2) | (b >> 6)
+#define PAL332(r,g,b) (((r) >> 5) << 5 | ((g) >> 5) << 2 | ((b) >> 6))
 
 // Standard VT100 colors (normal intensity)
-static const uint8_t TERM_PAL_BLACK   = PAL232(0,   0,   0);
-static const uint8_t TERM_PAL_RED     = PAL232(170, 0,   0);
-static const uint8_t TERM_PAL_GREEN   = PAL232(0,   170, 0);
-static const uint8_t TERM_PAL_YELLOW  = PAL232(170, 170, 0);
-static const uint8_t TERM_PAL_BLUE    = PAL232(0,   0,   170);
-static const uint8_t TERM_PAL_MAGENTA = PAL232(170, 0,   170);
-static const uint8_t TERM_PAL_CYAN    = PAL232(0,   170, 170);
-static const uint8_t TERM_PAL_WHITE   = PAL232(170, 170, 170);
+static const uint8_t TERM_PAL_BLACK   = PAL332(0,   0,   0);
+static const uint8_t TERM_PAL_RED     = PAL332(170, 0,   0);
+static const uint8_t TERM_PAL_GREEN   = PAL332(0,   170, 0);
+static const uint8_t TERM_PAL_YELLOW  = PAL332(170, 170, 0);
+static const uint8_t TERM_PAL_BLUE    = PAL332(0,   0,   170);
+static const uint8_t TERM_PAL_MAGENTA = PAL332(170, 0,   170);
+static const uint8_t TERM_PAL_CYAN    = PAL332(0,   170, 170);
+static const uint8_t TERM_PAL_WHITE   = PAL332(170, 170, 170);
 
 // Bright variants
-static const uint8_t TERM_PAL_BR_BLACK   = PAL232(85,  85,  85);
-static const uint8_t TERM_PAL_BR_RED     = PAL232(255, 85,  85);
-static const uint8_t TERM_PAL_BR_GREEN   = PAL232(85,  255, 85);
-static const uint8_t TERM_PAL_BR_YELLOW  = PAL232(255, 255, 85);
-static const uint8_t TERM_PAL_BR_BLUE    = PAL232(85,  85,  255);
-static const uint8_t TERM_PAL_BR_MAGENTA = PAL232(255, 85,  255);
-static const uint8_t TERM_PAL_BR_CYAN    = PAL232(85,  255, 255);
-static const uint8_t TERM_PAL_BR_WHITE   = PAL232(255, 255, 255);
+static const uint8_t TERM_PAL_BR_BLACK   = PAL332(85,  85,  85);
+static const uint8_t TERM_PAL_BR_RED     = PAL332(255, 85,  85);
+static const uint8_t TERM_PAL_BR_GREEN   = PAL332(85,  255, 85);
+static const uint8_t TERM_PAL_BR_YELLOW  = PAL332(255, 255, 85);
+static const uint8_t TERM_PAL_BR_BLUE    = PAL332(85,  85,  255);
+static const uint8_t TERM_PAL_BR_MAGENTA = PAL332(255, 85,  255);
+static const uint8_t TERM_PAL_BR_CYAN    = PAL332(85,  255, 255);
+static const uint8_t TERM_PAL_BR_WHITE   = PAL332(255, 255, 255);
 
 // Normal and bright color tables (indexed 0-7)
 static const uint8_t term_normal_colors[8] = {
@@ -480,8 +480,15 @@ static bool fruitjam_terminal_begin() {
     return false;
   }
 
-  // Fix palette index 255 — DVHSTX8::begin() loop is i < 255, skips it
-  display8.setColor(255, 255, 255, 255);  // white
+  // Fix default palette: DVHSTX8::begin() uses a broken 2-3-2 encoding
+  // (bit 5 wasted, only 128 unique colors, skips index 255).
+  // Overwrite with proper 3-3-2 (RRRGGGBB) encoding: 256 unique colors.
+  for (int i = 0; i < 256; i++) {
+    uint8_t r = (i >> 5) * 255 / 7;         // bits 7-5: 3 bits (8 R levels)
+    uint8_t g = ((i >> 2) & 7) * 255 / 7;   // bits 4-2: 3 bits (8 G levels)
+    uint8_t b = (i & 3) * 255 / 3;          // bits 1-0: 2 bits (4 B levels)
+    display8.setColor(i, r, g, b);
+  }
 
   // Clear screen to black
   display8.fillScreen(0);

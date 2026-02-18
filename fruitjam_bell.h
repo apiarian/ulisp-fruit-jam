@@ -24,7 +24,7 @@
 // ---- Bell visual flash parameters ----
 #define BELL_FLASH_DURATION_MS 80   // how long the visual flash lasts
 #define BELL_FLASH_BORDER_W 3       // border width in pixels
-#define BELL_FLASH_COLOR PAL232(255, 255, 85)  // bright yellow
+#define BELL_FLASH_COLOR PAL332(255, 255, 85)  // bright yellow
 
 // ---- Bell state ----
 static volatile bool fruitjam_bell_pending = false;
