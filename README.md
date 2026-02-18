@@ -18,6 +18,8 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - **Graphics mode:** Full 512×384 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
 - `(graphics-mode)` / `(text-mode)` switch instantly — no hardware reconfiguration, just clear and redraw
 - `(demo)` built-in interactive demo (paint + sound + buttons + LEDs)
+- `(font-table)` — graphical CP437 font map showing all 256 characters in a 16×16 grid with hex row/column labels (press any key to exit back to text mode)
+- `(font-table-text)` — text-mode version of the font table (control characters shown as dim dots)
 - Terminal text persists through graphics mode — returns exactly where you left off
 
 ### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
@@ -216,7 +218,7 @@ The display uses a single `DVHSTX8` object for both terminal and graphics. Text 
 
 Audio synthesis runs on core0 in the `testescape()` idle loop, filling a 1024-sample ring buffer that DMA streams to the TLV320DAC3100 via PIO I2S. The synth mixes 5 voices (wavetable lookup + ADSR envelope) per sample — about 0.5% CPU at 22050 Hz.
 
-All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 33 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires only 2 changed lines (`#define extensions` and `#include "fruitjam_library.h"`) plus 7 small board-config hooks, keeping the diff against upstream uLisp minimal for easy merging of future releases.
+All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 33 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, font table, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires only 2 changed lines (`#define extensions` and `#include "fruitjam_library.h"`) plus 7 small board-config hooks, keeping the diff against upstream uLisp minimal for easy merging of future releases.
 
 ### Workspace — PSRAM Enabled (1,000,000 Objects)
 

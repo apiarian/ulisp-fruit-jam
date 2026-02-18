@@ -10060,7 +10060,7 @@ void setup () {
   while ((millis() - start) < 5000) { if (Serial) break; }
   #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350) && defined(BOARD_HAS_PSRAM)
   // The DVHSTX library's global constructor (init_priority 101) changes clk_sys
-  // from 125 MHz to 240 MHz AFTER the Arduino core's PSRAM init ran at 125 MHz.
+  // from 150 MHz to 240 MHz AFTER the Arduino core's PSRAM init ran at 150 MHz.
   // The PSRAM QMI timing (divisor, rxdelay) must be recalculated for the actual
   // clock speed, otherwise PSRAM SCK = 240/2 = 120 MHz exceeds the 109 MHz max.
   {
