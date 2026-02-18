@@ -6,7 +6,7 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 ## What's New
 
-This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, keyboard input for Lisp programs (with modifier key support), a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, a screensaver with NeoPixel wave animation, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
+This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, a sprite sheet with flip/rotate/scale/remap, keyboard input for Lisp programs (with modifier key support), a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, a screensaver with NeoPixel wave animation, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
 ### Display (fruitjam_terminal.h + fruitjam_graphics.h)
 
@@ -22,6 +22,40 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - `(font-table)` — graphical CP437 font map showing all 256 characters in a 16×16 grid with hex row/column labels (press any key to exit back to text mode)
 - `(font-table-text)` — text-mode version of the font table (control characters shown as dim dots)
 - Terminal text persists through graphics mode — returns exactly where you left off
+
+### Sprite Sheet (fruitjam_sprites.h)
+
+- **256×256 pixel sprite sheet** — 8-bit palette indices, stored in PSRAM (64 KB)
+- **`sprite-pixel`** — get/set individual pixels on the sheet from Lisp
+- **`sprite-draw`** — blit any rectangle from the sheet to the screen with:
+  - **Color key transparency** (default: index 0 is transparent, `nil` = draw all)
+  - **Flip**: `:none`, `:h` (horizontal), `:v` (vertical), `:hv` (both)
+  - **Rotate**: `:none`, `:r90`, `:r180`, `:r270` (clockwise)
+  - **Integer scaling**: 1× to arbitrary (each pixel → scale×scale block)
+  - **Palette remapping**: 8 remap tables (256 entries each) for recoloring sprites without redrawing
+- **`sprite-remap`** — read/write/reset the 8 palette remap tables
+- **`sprite-save`** / **`sprite-load`** — stream-based persistence (works with SD card, serial, WiFi, or any uLisp stream)
+- Lazy allocation — no memory used until first sprite function call
+- Inspired by PICO-8 and TIC-80 fantasy consoles
+
+```lisp
+;; Draw a 16x16 red square on the sprite sheet
+(dotimes (y 16) (dotimes (x 16) (sprite-pixel x y 224)))
+
+;; Blit to screen at (100,100), flipped, scaled 2x
+(graphics-mode)
+(sprite-draw 0 0 16 16 100 100 0 :h :none 2)
+
+;; Recolor: remap red (224) to blue (3), draw with table 0
+(sprite-remap 0 224 3)
+(sprite-draw 0 0 16 16 200 100 0 :none :none 1 0)
+
+;; Save/load sprite sheet to SD card
+(with-sd-card (s "sprites.dat" 2) (sprite-save s))
+(with-sd-card (s "sprites.dat") (sprite-load s))
+```
+
+**5 Lisp functions:** `sprite-pixel`, `sprite-draw`, `sprite-remap`, `sprite-save`, `sprite-load`
 
 ### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
 
@@ -210,6 +244,7 @@ Core 0: uLisp interpreter + display (DVHSTX8 512×384) + audio synthesis
 Core 1: USB host keyboard + mouse (PIO USB via TinyUSB)
 
 Hardware: HSTX → HDMI, PIO 0 → I2S audio, PIO 2 → USB host + NeoPixels
+Memory:  SRAM = framebuffer + DMA + remap tables; PSRAM = Lisp workspace + sprite sheet
 DMA: 0–2 = HSTX video, 3 = PIO USB, 4 = I2S audio
 Interrupts: BUTTON1 (GPIO0) → escape, DMA_IRQ_1 → audio
 Headphone detect: polled via I2C every 500ms (not GPIO IRQ — single callback per core)
@@ -219,7 +254,7 @@ The display uses a single `DVHSTX8` object for both terminal and graphics. Text 
 
 Audio synthesis runs on core0 in the `testescape()` idle loop, filling a 1024-sample ring buffer that DMA streams to the TLV320DAC3100 via PIO I2S. The synth mixes 5 voices (wavetable lookup + ADSR envelope) per sample — about 0.5% CPU at 22050 Hz.
 
-All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 33 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, font table, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires only 2 changed lines (`#define extensions` and `#include "fruitjam_library.h"`) plus 7 small board-config hooks, keeping the diff against upstream uLisp minimal for easy merging of future releases.
+All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 38 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, sprite-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, font table, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires only 2 changed lines (`#define extensions` and `#include "fruitjam_library.h"`) plus 7 small board-config hooks, keeping the diff against upstream uLisp minimal for easy merging of future releases.
 
 ### Workspace — PSRAM Enabled (1,000,000 Objects)
 

@@ -648,6 +648,203 @@ object *fn_setscreensaver (object *args, object *env) {
   return nil;
 }
 
+// ---- Sprite functions ----
+
+/*
+  (sprite-pixel x y [color])
+  With 2 args: returns the palette index at (x,y) on the sprite sheet (0-255).
+  With 3 args: sets the pixel at (x,y) to color (0-255). Returns color.
+  x: 0-255, y: 0-255.
+*/
+object *fn_spritepixel (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  int x = checkinteger(first(args));
+  int y = checkinteger(second(args));
+  object *third_arg = cddr(args);
+  if (third_arg != NULL) {
+    // Set pixel
+    int color = checkinteger(car(third_arg));
+    if (color < 0 || color > 255) error("color 0-255", car(third_arg));
+    sprite_set_pixel(x, y, (uint8_t)color);
+    return number(color);
+  } else {
+    // Get pixel
+    return number(sprite_get_pixel(x, y));
+  }
+  #else
+  (void) args;
+  return number(0);
+  #endif
+}
+
+/*
+  (sprite-draw sx sy w h dx dy [key] [flip] [rotate] [scale] [remap])
+  Copies a rectangle from the sprite sheet to the screen framebuffer.
+  sx,sy: source top-left on sprite sheet. w,h: source size.
+  dx,dy: destination top-left on screen.
+  key: transparent palette index (default 0). nil = no transparency.
+  flip: :none(0) :h(1) :v(2) :hv(3). Default :none.
+  rotate: :none(0) :r90(1) :r180(2) :r270(3). Default :none.
+  scale: integer scale factor (default 1).
+  remap: remap table index 0-7, or nil (default nil).
+*/
+object *fn_spritedraw (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  // Required args
+  int sx = checkinteger(first(args)); args = cdr(args);
+  int sy = checkinteger(first(args)); args = cdr(args);
+  int w  = checkinteger(first(args)); args = cdr(args);
+  int h  = checkinteger(first(args)); args = cdr(args);
+  int dx = checkinteger(first(args)); args = cdr(args);
+  int dy = checkinteger(first(args)); args = cdr(args);
+
+  // Optional args
+  int key = 0;       // default: index 0 is transparent
+  int flip = 0;
+  int rotate = 0;
+  int scale = 1;
+  const uint8_t *remap = NULL;
+
+  // key
+  if (args != NULL) {
+    object *karg = first(args);
+    if (karg == nil) {
+      key = -1;  // nil = no transparency
+    } else {
+      key = checkinteger(karg);
+    }
+    args = cdr(args);
+  }
+  // flip
+  if (args != NULL) {
+    object *farg = first(args);
+    if (keywordp(farg)) {
+      flip = checkkeyword(farg);
+    } else {
+      flip = checkinteger(farg);
+    }
+    if (flip < 0 || flip > 3) error("flip 0-3", farg);
+    args = cdr(args);
+  }
+  // rotate
+  if (args != NULL) {
+    object *rarg = first(args);
+    if (keywordp(rarg)) {
+      rotate = checkkeyword(rarg);
+    } else {
+      rotate = checkinteger(rarg);
+    }
+    if (rotate < 0 || rotate > 3) error("rotate 0-3", rarg);
+    args = cdr(args);
+  }
+  // scale
+  if (args != NULL) {
+    scale = checkinteger(first(args));
+    if (scale < 1) error("scale >= 1", first(args));
+    args = cdr(args);
+  }
+  // remap
+  if (args != NULL) {
+    object *marg = first(args);
+    if (marg != nil) {
+      int table_idx = checkinteger(marg);
+      if (table_idx < 0 || table_idx >= SPRITE_REMAP_COUNT)
+        error("remap table 0-7", marg);
+      remap = sprite_remaps[table_idx];
+    }
+  }
+
+  mouse_hide_for_draw();
+  sprite_blit(sx, sy, w, h, dx, dy, key, flip, rotate, scale, remap);
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
+/*
+  (sprite-remap table [from [to]])
+  With 1 arg: resets remap table (0-7) to identity. Returns nil.
+  With 2 args: returns the current mapping for index 'from' in the table.
+  With 3 args: sets index 'from' to map to 'to'. Returns to.
+*/
+object *fn_spriteremap (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  int table_idx = checkinteger(first(args));
+  if (table_idx < 0 || table_idx >= SPRITE_REMAP_COUNT)
+    error("remap table 0-7", first(args));
+  args = cdr(args);
+  if (args == NULL) {
+    // Reset to identity
+    for (int i = 0; i < 256; i++) {
+      sprite_remaps[table_idx][i] = (uint8_t)i;
+    }
+    return nil;
+  }
+  int from = checkinteger(first(args));
+  if (from < 0 || from > 255) error("index 0-255", first(args));
+  args = cdr(args);
+  if (args == NULL) {
+    // Read mapping
+    return number(sprite_remaps[table_idx][from]);
+  }
+  // Write mapping
+  int to = checkinteger(first(args));
+  if (to < 0 || to > 255) error("index 0-255", first(args));
+  sprite_remaps[table_idx][from] = (uint8_t)to;
+  return number(to);
+  #else
+  (void) args;
+  return nil;
+  #endif
+}
+
+/*
+  (sprite-save stream)
+  Writes the 256x256 sprite sheet (65536 bytes) to a stream.
+  Typically used with with-sd-card:
+    (with-sd-card (s "sprites.dat" 2) (sprite-save s))
+*/
+object *fn_spritesave (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  pfun_t pfun = pstreamfun(args);
+  for (int i = 0; i < SPRITE_SHEET_SIZE; i++) {
+    pfun((char)sprite_sheet[i]);
+  }
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
+/*
+  (sprite-load stream)
+  Reads 65536 bytes from a stream into the sprite sheet.
+  Typically used with with-sd-card:
+    (with-sd-card (s "sprites.dat") (sprite-load s))
+*/
+object *fn_spriteload (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  gfun_t gfun = gstreamfun(args);
+  for (int i = 0; i < SPRITE_SHEET_SIZE; i++) {
+    sprite_sheet[i] = (uint8_t)gfun();
+  }
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
 // Symbol names
 const char stringGraphicsMode[] = "graphics-mode";
 const char stringTextMode[] = "text-mode";
@@ -682,6 +879,22 @@ const char stringPixelsColorHSV[] = "pixels-color-hsv";
 const char stringPixelsShow[] = "pixels-show";
 const char stringPixelsRainbow[] = "pixels-rainbow";
 const char stringSetScreensaver[] = "set-screensaver";
+const char stringSpritePixel[] = "sprite-pixel";
+const char stringSpriteDraw[] = "sprite-draw";
+const char stringSpriteRemap[] = "sprite-remap";
+const char stringSpriteSave[] = "sprite-save";
+const char stringSpriteLoad[] = "sprite-load";
+
+// Sprite flip keyword names
+const char stringKwNone[] = ":none";
+const char stringKwH[] = ":h";
+const char stringKwV[] = ":v";
+const char stringKwHV[] = ":hv";
+
+// Sprite rotate keyword names
+const char stringKwR90[] = ":r90";
+const char stringKwR180[] = ":r180";
+const char stringKwR270[] = ":r270";
 
 // Audio waveform keyword names
 const char stringKwSilence[] = ":silence";
@@ -790,6 +1003,37 @@ const char docSetScreensaver[] = "(set-screensaver [timeout])\n"
 "Default is 300 (5 minutes). The screensaver blanks the screen and\n"
 "breathes the NeoPixels if they are off. Any keypress wakes.";
 
+const char docSpritePixel[] = "(sprite-pixel x y [color])\n"
+"Gets or sets a pixel on the 256x256 sprite sheet.\n"
+"With 2 args: returns the palette index (0-255) at (x,y).\n"
+"With 3 args: sets the pixel to color (0-255). Returns color.";
+const char docSpriteDraw[] = "(sprite-draw sx sy w h dx dy [key] [flip] [rotate] [scale] [remap])\n"
+"Blits a rectangle from the sprite sheet to the screen.\n"
+"sx,sy: source top-left. w,h: source size. dx,dy: screen position.\n"
+"key: transparent index (default 0, nil=none). flip: :none :h :v :hv.\n"
+"rotate: :none :r90 :r180 :r270. scale: integer (default 1).\n"
+"remap: table index 0-7 or nil (default nil).";
+const char docSpriteRemap[] = "(sprite-remap table [from [to]])\n"
+"Manages palette remap tables (0-7) for sprite drawing.\n"
+"1 arg: resets table to identity. 2 args: reads mapping for index.\n"
+"3 args: maps 'from' to 'to'. Returns to.";
+const char docSpriteSave[] = "(sprite-save stream)\n"
+"Writes the 256x256 sprite sheet (65536 bytes) to a stream.\n"
+"Example: (with-sd-card (s \"sprites.dat\" 2) (sprite-save s))";
+const char docSpriteLoad[] = "(sprite-load stream)\n"
+"Reads 65536 bytes from a stream into the sprite sheet.\n"
+"Example: (with-sd-card (s \"sprites.dat\") (sprite-load s))";
+
+// Sprite flip/rotate keyword values (used by checkkeyword)
+#define SPRITE_FLIP_NONE 0
+#define SPRITE_FLIP_H    1
+#define SPRITE_FLIP_V    2
+#define SPRITE_FLIP_HV   3
+#define SPRITE_ROT_NONE  0
+#define SPRITE_ROT_90    1
+#define SPRITE_ROT_180   2
+#define SPRITE_ROT_270   3
+
 // Symbol lookup table
 const tbl_entry_t lookup_table2[] = {
   { stringGraphicsMode, fn_graphicsmode, 0200, docGraphicsMode },
@@ -825,6 +1069,11 @@ const tbl_entry_t lookup_table2[] = {
   { stringPixelsShow, fn_pixelsshow, 0200, docPixelsShow },
   { stringPixelsRainbow, fn_pixelsrainbow, 0205, docPixelsRainbow },
   { stringSetScreensaver, fn_setscreensaver, 0201, docSetScreensaver },
+  { stringSpritePixel, fn_spritepixel, 0223, docSpritePixel },
+  { stringSpriteDraw, fn_spritedraw, 0267, docSpriteDraw },
+  { stringSpriteRemap, fn_spriteremap, 0213, docSpriteRemap },
+  { stringSpriteSave, fn_spritesave, 0211, docSpriteSave },
+  { stringSpriteLoad, fn_spriteload, 0211, docSpriteLoad },
   { stringKwSilence, (fn_ptr_type)AUDIO_WAVE_SILENCE, 0, NULL },
   { stringKwSine, (fn_ptr_type)AUDIO_WAVE_SINE, 0, NULL },
   { stringKwSquare, (fn_ptr_type)AUDIO_WAVE_SQUARE, 0, NULL },
@@ -835,6 +1084,13 @@ const tbl_entry_t lookup_table2[] = {
   { stringKwSpeaker, (fn_ptr_type)AUDIO_OUTPUT_SPEAKER, 0, NULL },
   { stringKwHeadphone, (fn_ptr_type)AUDIO_OUTPUT_HEADPHONE, 0, NULL },
   { stringKwBoth, (fn_ptr_type)AUDIO_OUTPUT_BOTH, 0, NULL },
+  { stringKwNone, (fn_ptr_type)SPRITE_FLIP_NONE, 0, NULL },
+  { stringKwH, (fn_ptr_type)SPRITE_FLIP_H, 0, NULL },
+  { stringKwV, (fn_ptr_type)SPRITE_FLIP_V, 0, NULL },
+  { stringKwHV, (fn_ptr_type)SPRITE_FLIP_HV, 0, NULL },
+  { stringKwR90, (fn_ptr_type)SPRITE_ROT_90, 0, NULL },
+  { stringKwR180, (fn_ptr_type)SPRITE_ROT_180, 0, NULL },
+  { stringKwR270, (fn_ptr_type)SPRITE_ROT_270, 0, NULL },
 };
 
 // Table cross-reference functions - do not edit below this line

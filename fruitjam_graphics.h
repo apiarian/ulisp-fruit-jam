@@ -13,6 +13,7 @@
 
 #include "fruitjam_terminal.h"
 #include "fruitjam_mouse.h"
+#include "fruitjam_sprites.h"
 
 // ---- GFX text state (shadows for Adafruit_GFX protected members) ----
 // Tracked here because gfxwrite() needs them but they're protected in Adafruit_GFX.
@@ -28,6 +29,8 @@ static bool     fruitjam_text_wrap = true;
 // ---- Init: wire up hooks ----
 static void fruitjam_graphics_init() {
   fruitjam_mouse_init();
+  // Sprite init deferred — fruitjam_sprites_init() is called on first use
+  // to avoid allocating 64KB at boot when it may not be needed.
 }
 
 // ---- Enter graphics mode ----
