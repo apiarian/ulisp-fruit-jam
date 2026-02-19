@@ -705,8 +705,6 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance,
 }
 
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
-  (void)dev_addr;
-  (void)instance;
   kbd_last_keycode = 0;
   kbd_repeating = false;
   memset((void*)&kbd_prev_report, 0, sizeof(kbd_prev_report));
