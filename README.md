@@ -8,22 +8,30 @@ Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2
 
 This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, a sprite sheet with flip/rotate/scale/remap, keyboard input for Lisp programs (with modifier key support), a 5-voice wavetable synthesizer with ADSR envelopes, NeoPixel control, a screensaver with NeoPixel wave animation, Wi-Fi networking, SD card storage, and a hardware escape button — everything needed to use the Fruit Jam as a self-contained Lisp machine without a host computer.
 
-### Display (fruitjam_terminal.h + fruitjam_graphics.h)
+## Features
 
-- Single `DVHSTX8` display at **512×384 @ 8bpp** (1024×768 HDMI, pixel-doubled)
+### Display
+
+- **512×384 @ 8bpp** HDMI output (1024×768 pixel-doubled)
 - **Text mode:** 64×48 character terminal with VT100 escape sequences, blinking cursor, 8 ANSI colors, scrolling
-- **[unscii-8-thin](https://github.com/viznut/unscii) font** — 8×8 pixel bitmap font used throughout (terminal and graphics mode text). Clean, readable, designed for screens. Replaces the default Adafruit_GFX 5×7 font.
-- **Line editor:** Tab autocomplete of both **user-defined and built-in symbols** (cycles through all matches, wrapping around), parenthesis matching (highlights matching `(` in green when `)` is typed), 8-entry command history (Up/Down arrows), in-line cursor movement (Left/Right/Home/End with insert and delete at any position), Ctrl-C abort, Ctrl-U erase line. Inspired by the [Cardputer](http://www.ulisp.com/show?52G4) and [PicoCalc](http://www.ulisp.com/show?56ZO) uLisp machines.
-- **Terminal bell:** BEL character (`\a` / 0x07) triggers a brief yellow screen-border flash and a short audio blip (~1047 Hz sine, 60ms). Fires on buffer-full in the line editor and from Lisp via `(princ (code-char 7))`.
-- **256-color palette:** 8-bit indexed color with a **3-3-2 (RRRGGGBB)** default palette — 8 levels each for red and green, 4 for blue, giving 256 unique colors. The upstream `Adafruit_dvhstx` library ships with a broken 2-3-2 default (128 unique colors, bit 5 wasted); we overwrite it at init with the correct 3-3-2 mapping.
-- **Graphics mode:** Full 512×384 pixel framebuffer with the 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
-- `(graphics-mode)` / `(text-mode)` switch instantly — no hardware reconfiguration, just clear and redraw
+- **Graphics mode:** Full 512×384 pixel framebuffer with 256-color palette, accessed via uLisp GFX primitives (`draw-pixel`, `fill-rect`, `draw-circle`, etc.)
+- **[unscii-8-thin](https://github.com/viznut/unscii) font** — 8×8 bitmap font used throughout (terminal and graphics mode text)
+- **256-color palette:** 8-bit indexed color with a 3-3-2 (RRRGGGBB) layout — 8 levels each for red and green, 4 for blue
+- `(graphics-mode)` / `(text-mode)` switch instantly — terminal text persists through graphics mode
 - `(demo)` built-in interactive demo (paint + sound + buttons + LEDs)
-- `(font-table)` — graphical CP437 font map showing all 256 characters in a 16×16 grid with hex row/column labels (press any key to exit back to text mode)
-- `(font-table-text)` — text-mode version of the font table (control characters shown as dim dots)
-- Terminal text persists through graphics mode — returns exactly where you left off
+- `(font-table)` — graphical CP437 font map showing all 256 characters
+- `(font-table-text)` — text-mode version of the font table
 
-### Sprite Sheet (fruitjam_sprites.h)
+### Line Editor
+
+- **Tab autocomplete** of both user-defined and built-in symbols (cycles through all matches)
+- **Parenthesis matching** — highlights matching `(` in green when `)` is typed
+- **8-entry command history** (Up/Down arrows)
+- In-line cursor movement (Left/Right/Home/End with insert and delete at any position)
+- Ctrl-C abort, Ctrl-U erase line
+- **Terminal bell:** BEL character triggers a yellow border flash and audio blip
+
+### Sprite Sheet
 
 - **256×256 pixel sprite sheet** — 8-bit palette indices, stored in PSRAM (64 KB)
 - **`sprite-pixel`** — get/set individual pixels on the sheet from Lisp
@@ -62,13 +70,9 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **7 Lisp functions:** `sprite-pixel`, `sprite-draw`, `sprite-remap`, `sprite-save`, `sprite-load`, `sprite-remap-save`, `sprite-remap-load`
 
-### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
+### USB Keyboard + Mouse
 
-- PIO USB host on core1 (PIO 2 / DMA channel 3 to avoid HSTX conflicts)
-- HID keyboard → 256-entry 16-bit ring buffer → `gserial()` on core0 (REPL) or `(keyboard)` / `(wait-keyboard)` (Lisp programs)
-- US keyboard layout with shift, ctrl, caps lock
-- Key repeat (500ms delay, 50ms rate)
-- Automatic recovery from PIO USB deaf states and core1 lockups
+- USB keyboard with US layout, shift, ctrl, caps lock, key repeat
 - **USB mouse** with boot-protocol and generic HID report descriptor parsing
 - Mouse cursor: 8×8 arrow sprite with save-under buffer, auto-hidden during draw calls
 - `(mouse-x)`, `(mouse-y)`, `(mouse-buttons)`, `(mouse-click)` — read mouse state from Lisp
@@ -78,7 +82,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 - **`(keyboard)`** — non-blocking, returns next key as an integer or `nil` if buffer is empty
 - **`(wait-keyboard)`** — blocking, waits for a keypress (supports escape via button 1)
-- **`(keyboard-flush)`** — discards all pending keys (useful when entering a game loop or switching modes)
+- **`(keyboard-flush)`** — discards all pending keys
 - Return value encodes both key and modifier state in a single integer:
   - `(key-code k)` — extracts the key code (low byte): ASCII for printable keys, `*key-...*` constants for special keys
   - `(key-mod k)` — extracts the modifier bitmask (high byte)
@@ -100,30 +104,26 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
                 (= kc 19)) (save)))))))         ; Ctrl+S
 ```
 
-### Hardware Escape Button (fruitjam_escape.h)
+### Hardware Escape Button
 
 - BUTTON1 (GPIO0) configured as a GPIO interrupt
 - **Short press:** abort a running program and return to the REPL
-- **Ctrl-C on keyboard:** equivalent to a short press — aborts input and returns to the REPL prompt
-- **Long press (≥1s):** also triggers USB host power-cycle recovery (forces keyboard re-enumeration)
+- **Ctrl-C on keyboard:** equivalent to a short press
+- **Long press (≥1s):** also triggers USB host power-cycle recovery
 - Works even if USB host or the Lisp program is hung
-- If in graphics mode, automatically switches back to text mode
-- Silences all audio voices immediately (no notes left playing after abort)
-- Clears NeoPixels (turns them off)
-- Checked in `testescape()` and the `gserial()` input wait loop for immediate response
+- Automatically switches back to text mode, silences audio, clears NeoPixels
 
-### Audio — 5-Voice Wavetable Synthesizer (fruitjam_audio.h)
+### Audio — 5-Voice Wavetable Synthesizer
 
 - **5 uniform voices** (0–4) — any waveform on any voice, inspired by classic sound chips (SID, AY-3-8910, NES APU)
 - Built-in waveforms: sine, square, triangle, sawtooth, noise (LFSR)
 - **Custom wavetables:** pass a 256-element uLisp array to `audio-wave` for arbitrary waveform shapes
 - **ADSR envelopes** per voice: attack/decay/release in milliseconds, sustain level 0–255
 - `audio-note` auto-triggers envelope, `audio-release` fades to silence
-- **Self-releasing notes:** `(audio-note voice note duration)` — optional duration in ms schedules auto-release from note start, enabling fire-and-forget sound effects without blocking
+- **Self-releasing notes:** `(audio-note voice note duration)` — optional duration in ms for fire-and-forget sound effects
 - **Headphone detection:** auto-switches between speaker and 3.5mm headphone jack
 - `(audio-output mode)` for manual routing: `:auto` (default), `:speaker`, `:headphone`, or `:both`
-- **`audio-wave-save`** / **`audio-wave-load`** — stream-based wavetable persistence (save/load custom waveforms to SD, serial, WiFi, or any uLisp stream — avoids the 512-object overhead of passing wavetable data through uLisp arrays)
-- Hardware: TLV320DAC3100 I2S DAC, PIO 0 for I2S output, DMA channel 4, 22050 Hz sample rate
+- **`audio-wave-save`** / **`audio-wave-load`** — stream-based wavetable persistence
 
 ```lisp
 ;; Play a C major chord with sine waves
@@ -136,7 +136,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 (audio-note 0 72 150)
 
 ;; Plucky arpeggio with envelope
-(audio-wave 0 :square)                   ; square wave
+(audio-wave 0 :square)
 (audio-vol 0 180)
 (audio-envelope 0 5 50 0 100)            ; quick attack, short decay, no sustain
 (dolist (n '(48 55 52 60 48 55 52 60))
@@ -161,11 +161,10 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **14 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`, `audio-wave-save`, `audio-wave-load`
 
-### NeoPixel Control (fruitjam_neopixel.h)
+### NeoPixel Control
 
 - 5 onboard NeoPixels (WS2812, GPIO 32) accessible from Lisp
 - API matches the [official uLisp NeoPixel extension](http://www.ulisp.com/show?4GMV)
-- PIO 2 hardware driver (autonomous timing, immune to CPU interrupts)
 - HSV colors, gamma correction, rainbow fills
 
 ```lisp
@@ -179,21 +178,19 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **8 Lisp functions:** `pixels-begin`, `pixels-clear`, `pixels-fill`, `pixels-set-pixel-color`, `pixels-color`, `pixels-color-hsv`, `pixels-show`, `pixels-rainbow`
 
-### Screensaver (fruitjam_screensaver.h)
+### Screensaver
 
 - Activates after **5 minutes** of no keyboard or serial input at the REPL
 - Blanks the HDMI screen to black (prevents burn-in on static text)
-- If the NeoPixels are all off, starts a gentle **rolling wave** animation — a warm white gaussian peak sweeps back and forth across the 5 LEDs
-- If the NeoPixels are already in use (set by user code), only blanks the screen
-- Any keypress or hardware button (BUTTON1/2/3) instantly wakes: restores the terminal and turns off the wave
-- Does not activate during graphics mode; exiting graphics mode resets the idle timer
+- If the NeoPixels are all off, starts a gentle **rolling wave** animation
+- Any keypress or hardware button instantly wakes: restores the terminal and turns off the wave
 - `(set-screensaver seconds)` — configure timeout (default 300); `(set-screensaver 0)` to disable; `(set-screensaver)` returns current timeout
 
 ### Button Input
 
 - `(button n)` — returns `t` if button n (1–3) is pressed, `nil` otherwise
 - BUTTON2 (GPIO4) and BUTTON3 (GPIO5) are the primary buttons for user programs
-- BUTTON1 (GPIO0) is readable but not practically useful from Lisp — its escape interrupt fires on press before the result can be used
+- BUTTON1 (GPIO0) is readable but its escape interrupt fires on press before the result can be used
 
 ### SD Card & Package Management
 
@@ -247,34 +244,11 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - `(with-client (str "host" port) ...)` — HTTP requests and TCP connections
 - `(wifi-server)`, `(wifi-softap ...)` — run a server or create an access point
 
-## Architecture
+### Workspace — 1,000,000 Lisp Objects
 
-```
-Core 0: uLisp interpreter + display (DVHSTX8 512×384) + audio synthesis
-Core 1: USB host keyboard + mouse (PIO USB via TinyUSB)
+The Fruit Jam's 8MB PSRAM provides a workspace of **~1,000,000 Lisp objects** (~8MB). This is a ~28× increase over the SRAM-only workspace (~36,000 objects) and makes object count essentially a non-concern for any realistic program.
 
-Hardware: HSTX → HDMI, PIO 0 → I2S audio, PIO 2 → USB host + NeoPixels
-Memory:  SRAM = framebuffer + DMA + remap tables; PSRAM = Lisp workspace + sprite sheet
-DMA: 0–2 = HSTX video, 3 = PIO USB, 4 = I2S audio
-Interrupts: BUTTON1 (GPIO0) → escape, DMA_IRQ_1 → audio
-Headphone detect: polled via I2C every 500ms (not GPIO IRQ — single callback per core)
-```
-
-The display uses a single `DVHSTX8` object for both terminal and graphics. Text mode renders characters from the unscii-8-thin bitmap font directly into the 8bpp pixel framebuffer, with a character grid stored in RAM for scrolling and restore. Graphics mode clears the framebuffer and enables GFX drawing primitives. Switching between modes is instant — no HSTX reinitialization, no PLL changes, no DMA teardown. The same font is used for `(draw-char)` and `(with-gfx)` text in graphics mode.
-
-Audio synthesis runs on core0 in the `testescape()` idle loop, filling a 1024-sample ring buffer that DMA streams to the TLV320DAC3100 via PIO I2S. The synth mixes 5 voices (wavetable lookup + ADSR envelope) per sample — about 0.5% CPU at 22050 Hz.
-
-All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 47 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, sprite-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, font table, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires 2 added lines (`#define extensions` and `#include "fruitjam_library.h"`) plus ~24 board-config hooks (serial I/O, display init, escape handling, PSRAM timing, core1 USB host, etc.), keeping the diff against upstream uLisp manageable for merging future releases.
-
-### Workspace — PSRAM Enabled (1,000,000 Objects)
-
-The Fruit Jam's 8MB PSRAM is **enabled**, providing a workspace of **~1,000,000 Lisp objects** (~8MB). This is a ~28× increase over the SRAM-only workspace (~36,000 objects) and makes object count essentially a non-concern for any realistic program.
-
-The PSRAM required a timing fix: the Arduino core initializes PSRAM at boot (150 MHz), but the DVHSTX display library then changes the system clock to 240 MHz via a global constructor, leaving the PSRAM QMI timing registers misconfigured (PSRAM SCK = 120 MHz, exceeding the 109 MHz max). A `psram_reinit_timing()` call in `setup()` recalculates the correct timing for 240 MHz (divisor 3, PSRAM SCK = 80 MHz). This was the root cause of the upstream "HSTX + PSRAM don't work together" issue.
-
-The GC (mark-sweep over all 1M objects) takes several seconds. The `printfreespace` compile option is disabled to avoid a GC pass on every REPL prompt. Use `(room)` to check free objects on demand.
-
-A PSRAM stress test (`tools/stress-test.lsp`) validates data integrity under concurrent HSTX video DMA, I2S audio DMA, USB host activity, and heavy GC pressure. Tested: 500+ rounds, 0 errors.
+The GC (mark-sweep over all 1M objects) takes several seconds. Use `(room)` to check free objects on demand.
 
 ## Building
 
