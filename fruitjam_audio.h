@@ -88,7 +88,7 @@ static const struct pio_program audio_i2s_pio_program = {
 };
 
 // ---- Voice system ----
-#define AUDIO_NUM_VOICES  5   // 0-4 user-accessible (0-3 = wavetable tone, 4 = noise)
+#define AUDIO_NUM_VOICES  5   // 0-4 user-accessible, any waveform on any voice
 #define BELL_VOICE        5   // private voice for terminal bell (not user-accessible)
 #define AUDIO_TOTAL_VOICES 6  // total voices including bell
 #define AUDIO_WAVETABLE_SIZE 256
@@ -128,7 +128,7 @@ typedef struct {
     uint32_t phase_inc;       // phase increment per sample (frequency)
     uint8_t volume;           // 0-255 (base volume, scaled by envelope if set)
     uint8_t waveform_id;      // which built-in waveform, or CUSTOM
-    uint16_t noise_lfsr;      // LFSR state (voice 4 only)
+    uint16_t noise_lfsr;      // LFSR state (used when waveform is noise)
     audio_envelope_t env;     // ADSR envelope
     uint32_t release_at_ms;   // auto-release timestamp (0 = disabled)
 } audio_voice_t;
@@ -663,7 +663,8 @@ static inline uint8_t audio_envelope_tick(audio_envelope_t *e) {
 static void audio_voices_init(void) {
     memset(audio_voices, 0, sizeof(audio_voices));
     for (int i = 0; i < AUDIO_TOTAL_VOICES; i++) {
-        audio_voices[i].noise_lfsr = 0xACE1; // seed LFSR
+        // Distinct LFSR seeds so simultaneous noise voices don't correlate
+        audio_voices[i].noise_lfsr = 0xACE1 ^ (i * 0x1337);
     }
 }
 
@@ -774,7 +775,7 @@ static void fruitjam_audio_fill(void) {
             if (eff_vol == 0) continue;
 
             int8_t sample;
-            if (v == 4 && voice->waveform_id == AUDIO_WAVE_NOISE) {
+            if (voice->waveform_id == AUDIO_WAVE_NOISE) {
                 // Noise: advance LFSR at rate controlled by phase_inc
                 voice->phase += voice->phase_inc;
                 // When phase wraps past bit 24, clock the LFSR

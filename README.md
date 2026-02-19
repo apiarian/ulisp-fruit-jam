@@ -114,7 +114,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 ### Audio — 5-Voice Wavetable Synthesizer (fruitjam_audio.h)
 
-- **4 wavetable tone voices** (0–3) + **1 noise voice** (4) — inspired by classic sound chips (SID, AY-3-8910, NES APU)
+- **5 uniform voices** (0–4) — any waveform on any voice, inspired by classic sound chips (SID, AY-3-8910, NES APU)
 - Built-in waveforms: sine, square, triangle, sawtooth, noise (LFSR)
 - **Custom wavetables:** pass a 256-element uLisp array to `audio-wave` for arbitrary waveform shapes
 - **ADSR envelopes** per voice: attack/decay/release in milliseconds, sustain level 0–255
