@@ -5,7 +5,8 @@
 // Includes blit-to-screen with clipping, color key transparency,
 // flip/rotate, integer scaling, and palette remapping.
 //
-// Lisp API: sprite-pixel, sprite-draw, sprite-remap, sprite-save, sprite-load
+// Lisp API: sprite-pixel, sprite-draw, sprite-remap, sprite-save, sprite-load,
+//           sprite-remap-save, sprite-remap-load
 // See SPRITE-PLAN.md for full design rationale.
 
 #ifndef FRUITJAM_SPRITES_H

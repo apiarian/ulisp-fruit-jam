@@ -845,6 +845,92 @@ object *fn_spriteload (object *args, object *env) {
   return nil;
 }
 
+/*
+  (sprite-remap-save table stream)
+  Writes a remap table (0-7) as 256 bytes to a stream.
+  Example: (with-sd-card (s "remap.dat" 2) (sprite-remap-save 0 s))
+*/
+object *fn_spriteremapsave (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  int table_idx = checkinteger(first(args));
+  if (table_idx < 0 || table_idx >= SPRITE_REMAP_COUNT)
+    error("remap table 0-7", first(args));
+  pfun_t pfun = pstreamfun(cdr(args));
+  for (int i = 0; i < 256; i++) {
+    pfun((char)sprite_remaps[table_idx][i]);
+  }
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
+/*
+  (sprite-remap-load table stream)
+  Reads 256 bytes from a stream into a remap table (0-7).
+  Example: (with-sd-card (s "remap.dat") (sprite-remap-load 0 s))
+*/
+object *fn_spriteremapload (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  if (!fruitjam_sprites_init()) error2("sprite sheet alloc failed");
+  int table_idx = checkinteger(first(args));
+  if (table_idx < 0 || table_idx >= SPRITE_REMAP_COUNT)
+    error("remap table 0-7", first(args));
+  gfun_t gfun = gstreamfun(cdr(args));
+  for (int i = 0; i < 256; i++) {
+    sprite_remaps[table_idx][i] = (uint8_t)gfun();
+  }
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
+/*
+  (audio-wave-save voice stream)
+  Writes a voice's 256-byte wavetable to a stream.
+  Example: (with-sd-card (s "wave.dat" 2) (audio-wave-save 0 s))
+*/
+object *fn_audiowavesave (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  pfun_t pfun = pstreamfun(cdr(args));
+  for (int i = 0; i < AUDIO_WAVETABLE_SIZE; i++) {
+    pfun((char)audio_voices[voice].wavetable[i]);
+  }
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
+/*
+  (audio-wave-load voice stream)
+  Reads 256 bytes from a stream into a voice's wavetable.
+  Sets the voice's waveform to custom. Example:
+    (with-sd-card (s "wave.dat") (audio-wave-load 0 s))
+*/
+object *fn_audiowaveload (object *args, object *env) {
+  (void) env;
+  #if defined(ARDUINO_ADAFRUIT_FRUITJAM_RP2350)
+  int voice = checkinteger(first(args));
+  if (voice < 0 || voice >= AUDIO_NUM_VOICES) error("voice out of range", first(args));
+  gfun_t gfun = gstreamfun(cdr(args));
+  for (int i = 0; i < AUDIO_WAVETABLE_SIZE; i++) {
+    audio_voices[voice].wavetable[i] = (int8_t)gfun();
+  }
+  audio_voices[voice].waveform_id = AUDIO_WAVE_CUSTOM;
+  #else
+  (void) args;
+  #endif
+  return nil;
+}
+
 // Symbol names
 const char stringGraphicsMode[] = "graphics-mode";
 const char stringTextMode[] = "text-mode";
@@ -884,6 +970,10 @@ const char stringSpriteDraw[] = "sprite-draw";
 const char stringSpriteRemap[] = "sprite-remap";
 const char stringSpriteSave[] = "sprite-save";
 const char stringSpriteLoad[] = "sprite-load";
+const char stringSpriteRemapSave[] = "sprite-remap-save";
+const char stringSpriteRemapLoad[] = "sprite-remap-load";
+const char stringAudioWaveSave[] = "audio-wave-save";
+const char stringAudioWaveLoad[] = "audio-wave-load";
 
 // Sprite flip keyword names
 const char stringKwNone[] = ":none";
@@ -1023,6 +1113,18 @@ const char docSpriteSave[] = "(sprite-save stream)\n"
 const char docSpriteLoad[] = "(sprite-load stream)\n"
 "Reads 65536 bytes from a stream into the sprite sheet.\n"
 "Example: (with-sd-card (s \"sprites.dat\") (sprite-load s))";
+const char docSpriteRemapSave[] = "(sprite-remap-save table stream)\n"
+"Writes remap table (0-7) as 256 bytes to a stream.\n"
+"Example: (with-sd-card (s \"remap.dat\" 2) (sprite-remap-save 0 s))";
+const char docSpriteRemapLoad[] = "(sprite-remap-load table stream)\n"
+"Reads 256 bytes from a stream into remap table (0-7).\n"
+"Example: (with-sd-card (s \"remap.dat\") (sprite-remap-load 0 s))";
+const char docAudioWaveSave[] = "(audio-wave-save voice stream)\n"
+"Writes voice's 256-byte wavetable to a stream.\n"
+"Example: (with-sd-card (s \"wave.dat\" 2) (audio-wave-save 0 s))";
+const char docAudioWaveLoad[] = "(audio-wave-load voice stream)\n"
+"Reads 256 bytes from a stream into voice's wavetable (sets waveform to custom).\n"
+"Example: (with-sd-card (s \"wave.dat\") (audio-wave-load 0 s))";
 
 // Sprite flip/rotate keyword values (used by checkkeyword)
 #define SPRITE_FLIP_NONE 0
@@ -1074,6 +1176,10 @@ const tbl_entry_t lookup_table2[] = {
   { stringSpriteRemap, fn_spriteremap, 0213, docSpriteRemap },
   { stringSpriteSave, fn_spritesave, 0211, docSpriteSave },
   { stringSpriteLoad, fn_spriteload, 0211, docSpriteLoad },
+  { stringSpriteRemapSave, fn_spriteremapsave, 0222, docSpriteRemapSave },
+  { stringSpriteRemapLoad, fn_spriteremapload, 0222, docSpriteRemapLoad },
+  { stringAudioWaveSave, fn_audiowavesave, 0222, docAudioWaveSave },
+  { stringAudioWaveLoad, fn_audiowaveload, 0222, docAudioWaveLoad },
   { stringKwSilence, (fn_ptr_type)AUDIO_WAVE_SILENCE, 0, NULL },
   { stringKwSine, (fn_ptr_type)AUDIO_WAVE_SINE, 0, NULL },
   { stringKwSquare, (fn_ptr_type)AUDIO_WAVE_SQUARE, 0, NULL },

@@ -35,6 +35,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
   - **Palette remapping**: 8 remap tables (256 entries each) for recoloring sprites without redrawing
 - **`sprite-remap`** — read/write/reset the 8 palette remap tables
 - **`sprite-save`** / **`sprite-load`** — stream-based persistence (works with SD card, serial, WiFi, or any uLisp stream)
+- **`sprite-remap-save`** / **`sprite-remap-load`** — stream-based persistence for remap tables
 - Lazy allocation — no memory used until first sprite function call
 - Inspired by PICO-8 and TIC-80 fantasy consoles
 
@@ -53,9 +54,13 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 ;; Save/load sprite sheet to SD card
 (with-sd-card (s "sprites.dat" 2) (sprite-save s))
 (with-sd-card (s "sprites.dat") (sprite-load s))
+
+;; Save/load remap tables
+(with-sd-card (s "remap0.dat" 2) (sprite-remap-save 0 s))
+(with-sd-card (s "remap0.dat") (sprite-remap-load 0 s))
 ```
 
-**5 Lisp functions:** `sprite-pixel`, `sprite-draw`, `sprite-remap`, `sprite-save`, `sprite-load`
+**7 Lisp functions:** `sprite-pixel`, `sprite-draw`, `sprite-remap`, `sprite-save`, `sprite-load`, `sprite-remap-save`, `sprite-remap-load`
 
 ### USB Host Keyboard + Mouse (fruitjam_usbhost.h + fruitjam_graphics.h)
 
@@ -117,6 +122,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - **Self-releasing notes:** `(audio-note voice note duration)` — optional duration in ms schedules auto-release from note start, enabling fire-and-forget sound effects without blocking
 - **Headphone detection:** auto-switches between speaker and 3.5mm headphone jack
 - `(audio-output mode)` for manual routing: `:auto` (default), `:speaker`, `:headphone`, or `:both`
+- **`audio-wave-save`** / **`audio-wave-load`** — stream-based wavetable persistence (save/load custom waveforms to SD, serial, WiFi, or any uLisp stream — avoids the 512-object overhead of passing wavetable data through uLisp arrays)
 - Hardware: TLV320DAC3100 I2S DAC, PIO 0 for I2S output, DMA channel 4, 22050 Hz sample rate
 
 ```lisp
@@ -142,6 +148,10 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
     (setf (aref wt i) (truncate (* 127 (sin (* 6.283 (/ i 256.0)))) 1)))
   (audio-wave 0 wt))
 
+;; Save/load custom wavetables to SD card
+(with-sd-card (s "wave0.dat" 2) (audio-wave-save 0 s))
+(with-sd-card (s "wave0.dat") (audio-wave-load 0 s))
+
 (audio-output :speaker)                    ; force speaker output
 (audio-output :auto)                      ; restore auto-switching
 (audio-stop-all)                          ; silence everything
@@ -149,7 +159,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 
 **Built-in demo:** `(demo)` — an interactive paint app that showcases audio (UI click/blip sound effects, startup jingle), mouse drawing with **5 sprite-based brush shapes** (circle, square, diamond, star, spray — procedurally generated on the sprite sheet at startup, drawn via `sprite-draw` with remap for recoloring), 3 brush scales using integer sprite scaling, button input (color/size cycling), keyboard shortcuts (Escape to quit, b/c/s/x for brush/color/size/clear), and NeoPixels (reflecting current brush color).
 
-**12 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`
+**14 Lisp functions:** `audio-wave`, `audio-freq`, `audio-note`, `audio-vol`, `audio-master-vol`, `audio-stop`, `audio-stop-all`, `audio-playing`, `audio-envelope`, `audio-trigger`, `audio-release`, `audio-output`, `audio-wave-save`, `audio-wave-load`
 
 ### NeoPixel Control (fruitjam_neopixel.h)
 
@@ -254,7 +264,7 @@ The display uses a single `DVHSTX8` object for both terminal and graphics. Text 
 
 Audio synthesis runs on core0 in the `testescape()` idle loop, filling a 1024-sample ring buffer that DMA streams to the TLV320DAC3100 via PIO I2S. The synth mixes 5 voices (wavetable lookup + ADSR envelope) per sample — about 0.5% CPU at 22050 Hz.
 
-All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 38 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, sprite-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, font table, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires only 2 changed lines (`#define extensions` and `#include "fruitjam_library.h"`) plus 7 small board-config hooks, keeping the diff against upstream uLisp minimal for easy merging of future releases.
+All Fruit Jam-specific code lives in separate files. Hardware drivers are in `.h` files included from the board config block. The 42 Fruit Jam Lisp functions (graphics-mode, audio-\*, mouse-\*, sprite-\*, keyboard, etc.) are in `fruitjam-extensions.ino`, a standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]`. The Lisp Library (keyboard constants, package system, font table, demo) is in `fruitjam_library.h` as a C++ raw string literal. The main `.ino` requires only 2 changed lines (`#define extensions` and `#include "fruitjam_library.h"`) plus 7 small board-config hooks, keeping the diff against upstream uLisp minimal for easy merging of future releases.
 
 ### Workspace — PSRAM Enabled (1,000,000 Objects)
 
