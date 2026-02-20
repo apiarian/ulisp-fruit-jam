@@ -1,6 +1,6 @@
 # uLisp for the Adafruit Fruit Jam
 
-A version of the [uLisp](http://www.ulisp.com/) interpreter for the [Adafruit Fruit Jam](https://www.adafruit.com/product/6295) (RP2350B), turning it into a standalone Lisp computer — connect a USB keyboard, an HDMI monitor, power on, and you're in a Lisp REPL.
+A version of the [uLisp](http://www.ulisp.com/) interpreter for the [Adafruit Fruit Jam](https://www.adafruit.com/product/6200) (RP2350B), turning it into a standalone Lisp computer — connect a USB keyboard, an HDMI monitor, power on, and you're in a Lisp REPL.
 
 Based on [uLisp ARM Release 4.9](http://www.ulisp.com/show?5CSS) (9th February 2026).
 
@@ -274,4 +274,4 @@ Open `ulisp-fruit-jam.ino` in the Arduino IDE with the [Adafruit RP2350 board pa
 
 - [uLisp](http://www.ulisp.com/) — the upstream Lisp interpreter
 - [uLisp Fruit Jam page](http://www.ulisp.com/show?5CSS)
-- [Adafruit Fruit Jam](https://www.adafruit.com/product/6295)
+- [Adafruit Fruit Jam](https://www.adafruit.com/product/6200)

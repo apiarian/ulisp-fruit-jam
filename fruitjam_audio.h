@@ -1,8 +1,5 @@
 // fruitjam_audio.h — TLV320DAC3100 I2S DAC + wavetable synth for Fruit Jam
 //
-// Phase 5, Stage 1: DAC initialization + I2S PIO output + DMA ring buffer
-// Produces silence — confirms the audio hardware path is alive.
-//
 // Hardware path:
 //   PWM → MCLK (GPIO25, 15 MHz)
 //   I2C0 → TLV320 register config (addr 0x18, SDA=20, SCL=21)
