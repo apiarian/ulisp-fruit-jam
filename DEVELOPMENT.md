@@ -63,6 +63,22 @@ The exact mechanism is unclear — possibly the new allocation overlaps with HST
 
 Also: prefer **lazy allocation** (on first use) over boot-time allocation. Even a 2KB static array in `.bss` was initially suspected of interfering — moving everything to heap-allocated and lazy eliminated the issue. Boot-time allocation competes with the display library's init sequence.
 
+## Display Reset (HSTX + DMA Recovery)
+
+The HSTX DVI output occasionally loses signal — DMA stalls or HSTX block corruption cause the monitor to go "no signal" while the system otherwise continues running. Root cause is unclear (possibly DMA descriptor corruption from heap pressure or a library bug).
+
+**Recovery:** `fruitjam_display_reset()` in `fruitjam_terminal.h` does a full teardown and reinit:
+1. Save the 192KB framebuffer to PSRAM via `__psram_malloc()`
+2. `display8.end()` — stops DMA channels 0–2, resets HSTX block, frees SRAM buffers
+3. `display8.begin()` — re-allocates framebuffer + line buffers, restarts DMA chain
+4. Re-apply the correct 3-3-2 palette (because `begin()` installs the broken 2-3-2 default)
+5. Restore the framebuffer from the PSRAM copy
+6. Free the PSRAM copy
+
+**Trigger:** Long-press BUTTON1 (≥1s) sets `fruitjam_display_reset_requested` from core1. The flag is checked in `testescape()` on core0 (DMA/IRQ reconfiguration is not core-safe across cores).
+
+**Fallback:** If the PSRAM save fails, `term_restore_from_grid()` redraws the terminal from the character grid (lossy in graphics mode — only terminal content survives).
+
 ## USB Host Stability
 
 - **PIO USB silent failure mode:** After transient glitches, TinyUSB never re-enumerates — HID reports arrive with `len=0` indefinitely. Multiple recovery mechanisms in `fruitjam_usbhost.h`.
@@ -86,6 +102,10 @@ Fill all available ring buffer space per `fruitjam_audio_fill()` call, not just 
 - **USB Stack setting:** Must be "Adafruit TinyUSB" (not "Host (native)"). "Host (native)" disables USB device mode — no serial.
 - **Library discovery:** `#include <pio_usb.h>` must appear in the `.ino` file (angle brackets) to force Arduino's library resolver to add include paths. `#include "pio_usb.h"` inside a `.h` file isn't scanned.
 - **Duplicate libraries:** A user-installed `Adafruit_TinyUSB_Library` alongside the board-bundled version can cause USB host hangs. Remove user-installed copy.
+
+## Screensaver vs. Long-Running Programs
+
+The screensaver idle timeout was only reset by keyboard/serial input events. Long-running Lisp programs that print output without reading input (e.g., compute loops with `print`) would trip the 5-minute timeout and blank the screen mid-execution. **Fix:** `screensaver_poke()` is now called from `testescape()` every 500ms, keeping the screensaver at bay whenever the interpreter is actively running.
 
 ## Cooperative Multitasking
 

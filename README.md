@@ -109,7 +109,7 @@ This fork adds USB keyboard + mouse input, an HDMI terminal + graphics display, 
 - BUTTON1 (GPIO0) configured as a GPIO interrupt
 - **Short press:** abort a running program and return to the REPL
 - **Ctrl-C on keyboard:** equivalent to a short press
-- **Long press (≥1s):** also triggers USB host power-cycle recovery
+- **Long press (≥1s):** also triggers USB host power-cycle recovery and HDMI display reset (recovers from DMA stalls or HSTX corruption)
 - Works even if USB host or the Lisp program is hung
 - Automatically switches back to text mode, silences audio, clears NeoPixels
 

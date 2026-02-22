@@ -450,6 +450,7 @@ static int fruitjam_line_getchar(int raw_c) {
 // Called from gserial_flush() in the main .ino.
 static void fruitjam_gserial_flush_impl () {
   linebuf_len = 0;
+  linebuf_pos = 0;
   linebuf_read = 0;
   linebuf_ready = false;
   line_autocomplete_reset = true;

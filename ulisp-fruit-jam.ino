@@ -10155,9 +10155,10 @@ void loop1 () {
       // Button released — short press only, no USB reset
       escape_button_press_time = 0;
     } else if ((millis() - escape_button_press_time) >= ESCAPE_LONG_PRESS_MS) {
-      // Held for >=1s — trigger USB reset
+      // Held for >=1s — trigger USB reset + display reset
       escape_button_press_time = 0;
       usbh_manual_reset_requested = true;
+      fruitjam_display_reset_requested = true;
     }
   }
   fruitjam_usbhost_loop1();

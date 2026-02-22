@@ -98,6 +98,10 @@ Flash (16MB):
 
 The display uses a single `DVHSTX8` object for both terminal and graphics. Text mode renders characters from the unscii-8-thin bitmap font directly into the 8bpp pixel framebuffer, with a character grid stored in RAM for scrolling and restore. Graphics mode clears the framebuffer and enables GFX drawing primitives. Switching between modes is instant — no HSTX reinitialization, no PLL changes, no DMA teardown. The same font is used for `(draw-char)` and `(with-gfx)` text in graphics mode.
 
+### Display Reset / Recovery
+
+Long-pressing BUTTON1 (≥1s) sets a `fruitjam_display_reset_requested` flag from core1. On the next `testescape()` call (core0), `fruitjam_display_reset()` runs: it saves the framebuffer to PSRAM, calls `display8.end()` (stops DMA channels 0–2, resets HSTX), then `display8.begin()` (re-allocates buffers, restarts DMA), re-applies the 3-3-2 palette, and restores the framebuffer from PSRAM. This recovers from DMA stalls or HSTX corruption that cause "no signal" on the monitor. The reset must run on core0 because DMA/IRQ reconfiguration is not core-safe.
+
 ### 256-Color Palette
 
 8-bit indexed color with a 3-3-2 (RRRGGGBB) layout. The upstream `Adafruit_dvhstx` library ships with a broken 2-3-2 default (128 unique colors, bit 5 wasted); we overwrite it at init with the correct 3-3-2 mapping. The library's palette system is fully encoding-agnostic — `setColor()` stores arbitrary RGB888 values, and the scanline renderer does a straight `palette[byte]` lookup.
@@ -124,7 +128,7 @@ All Fruit Jam-specific code lives in separate files:
 |------|---------|
 | `fruitjam-extensions.ino` | 47 Lisp functions (graphics-mode, audio-\*, mouse-\*, sprite-\*, keyboard, etc.) — standard [uLisp Extensions File](http://www.ulisp.com/show?19Q4) with its own `lookup_table2[]` |
 | `fruitjam_library.h` | Lisp Library as a C++ raw string literal (keyboard constants, package system, font table, demo) |
-| `fruitjam_terminal.h` | Terminal emulator — VT100, character grid, cursor, scrolling |
+| `fruitjam_terminal.h` | Terminal emulator — VT100, character grid, cursor, scrolling, display reset/recovery |
 | `fruitjam_graphics.h` | Graphics mode, GFX integration, mouse cursor rendering |
 | `fruitjam_font.h` | unscii-8-thin CP437 bitmap font data |
 | `fruitjam_lineedit.h` | Line editor — autocomplete, history, paren matching |
@@ -137,7 +141,7 @@ All Fruit Jam-specific code lives in separate files:
 | `fruitjam_sprites.h` | Sprite sheet, remap tables, blit engine |
 | `fruitjam_escape.h` | Hardware escape button (GPIO interrupt) |
 | `fruitjam_screensaver.h` | Idle screen blanking + NeoPixel wave animation |
-| `fruitjam_hooks.h` | Hook functions included after `testescape()` dependencies are defined |
+| `fruitjam_hooks.h` | Hook functions: escape check, display reset dispatch, screensaver poke, serial escape |
 
 ### Changes to the .ino
 

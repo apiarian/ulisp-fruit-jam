@@ -40,13 +40,24 @@ static void fruitjam_testescape_impl () {
     }
     error2("escape!");
   }
+  // Check if a display reset was requested (long-press triggers this from loop1)
+  #ifndef FRUITJAM_NO_DISPLAY
+  if (fruitjam_display_reset_requested) {
+    fruitjam_display_reset_requested = false;
+    fruitjam_display_reset();
+  }
+  #endif
   mouse_update_cursor();
   fruitjam_audio_fill();
   fruitjam_bell_tick();
-  // Serial escape check (500ms throttled) — same as upstream
+  // Throttled checks (500ms) — serial escape, screensaver poke
   static unsigned long n;
   if (millis()-n < 500) return;
   n = millis();
+  // Poke the screensaver timer while the Lisp interpreter is actively running.
+  // Without this, long-running programs that print without reading input
+  // would trip the idle timeout (screensaver_poke was only called on input).
+  screensaver_poke();
   if (Serial.available() && Serial.read() == '~') error2("escape!");
 }
 

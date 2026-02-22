@@ -510,6 +510,58 @@ static bool fruitjam_terminal_begin() {
   return true;
 }
 
+// ---- Display reset (HSTX + DMA recovery) ----
+// Tears down and re-initializes the HSTX display pipeline.
+// Recovers from DMA stalls or HSTX corruption that cause "no signal".
+// In terminal mode, redraws from term_grid. In graphics mode, saves the
+// framebuffer to PSRAM before teardown and restores it after re-init.
+// Callable from core0 only (DMA/IRQ reconfiguration is not core-safe).
+
+static volatile bool fruitjam_display_reset_requested = false;
+
+static void fruitjam_display_reset() {
+  #ifndef FRUITJAM_NO_DISPLAY
+  // Save framebuffer to PSRAM before teardown (end/begin frees and re-mallocs).
+  // This preserves both graphics mode content and terminal mode content.
+  uint8_t *fb_save = nullptr;
+  uint8_t *fb = display8.getBuffer();
+  if (fb) {
+    extern void *__psram_malloc(size_t size);
+    fb_save = (uint8_t *)__psram_malloc(DISPLAY_WIDTH * DISPLAY_HEIGHT);
+    if (fb_save) memcpy(fb_save, fb, DISPLAY_WIDTH * DISPLAY_HEIGHT);
+  }
+
+  // Tear down the display (stops DMA ch 0-2, resets HSTX block, frees buffers)
+  display8.end();
+  delay(10);
+
+  // Re-initialize (resets HSTX, allocates new framebuffer, restarts DMA chain)
+  if (!display8.begin()) {
+    if (fb_save) { extern void __psram_free(void *ptr); __psram_free(fb_save); }
+    return;
+  }
+
+  // Re-apply proper 3-3-2 palette (begin() installs broken 2-3-2)
+  for (int i = 0; i < 256; i++) {
+    uint8_t r = (i >> 5) * 255 / 7;
+    uint8_t g = ((i >> 2) & 7) * 255 / 7;
+    uint8_t b = (i & 3) * 255 / 3;
+    display8.setColor(i, r, g, b);
+  }
+
+  // Restore framebuffer content
+  fb = display8.getBuffer();
+  if (fb_save && fb) {
+    memcpy(fb, fb_save, DISPLAY_WIDTH * DISPLAY_HEIGHT);
+  } else if (fb) {
+    // Couldn't save — best effort: redraw terminal grid
+    term_cursor_drawn = false;
+    term_restore_from_grid();
+  }
+  if (fb_save) { extern void __psram_free(void *ptr); __psram_free(fb_save); }
+  #endif
+}
+
 // ---- Print to terminal (+ mirror to serial) ----
 
 // Filter ANSI escape sequences from serial output.
